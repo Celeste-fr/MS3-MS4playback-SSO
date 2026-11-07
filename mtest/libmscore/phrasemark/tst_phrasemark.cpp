@@ -41,7 +41,8 @@ using namespace Ms;
 //    "phraseMarks" through saving and loading, undo, copy / paste, parts.
 //    phrasemark.musicxml: violin, C5 D5 E5 F5 | G5 F5 E5 D5 | rest | rest, a slur over the eight
 //    notes (the phrase mark) and an ordinary one inside it over E5 F5 G5; 4/4 at 120 BPM.
-//    Shape and Ending (slur.h › Phrase shape and ending): levels and tempo, their metaTag, undo, copy / paste, parts
+//    Shape, Peak and Ending (slur.h › Phrase shape and ending): the swell (MuseScore 3 / 4, SSO) and tempo, their
+//    metaTag, undo, copy / paste, parts. swell.musicxml: violin, mf, a phrase mark over two whole notes G4 | E4, rest
 //---------------------------------------------------------
 
 class TestPhraseMark : public QObject, public MTest
@@ -96,12 +97,79 @@ class TestPhraseMark : public QObject, public MTest
             slur->undoChangeProperty(Pid::PHRASE_MARK, on);
             slur->score()->endCmd();
             }
-      static void setShape(Slur* slur, int shape, int ending)
+      struct Ev { int tick; NPlayEvent e; };
+      static void setShape(Slur* slur, int shape, int ending, int peak = PhraseMark::PEAK_AUTO)
             {
             slur->score()->startCmd();
             slur->undoChangeProperty(Pid::PHRASE_SHAPE, shape);
             slur->undoChangeProperty(Pid::PHRASE_ENDING, ending);
+            slur->undoChangeProperty(Pid::PHRASE_PEAK, peak);
             slur->score()->endCmd();
+            }
+      // the values of controller cc in time order on the channel / route of the first note-on (built-in: channel; a
+      // library: its port and channel), each tick's last value
+      static std::vector<std::pair<int, int>> curve(const std::vector<Ev>& ev, int cc)
+            {
+            const NPlayEvent* first = nullptr;
+            for (const Ev& e : ev)
+                  if (!first && e.e.type() == ME_NOTEON && e.e.velo() > 0 && !e.e.librarySwitch())
+                        first = &e.e;
+            std::vector<std::pair<int, int>> list;
+            if (!first)
+                  return list;
+            for (const Ev& e : ev) {
+                  if (e.e.type() != ME_CONTROLLER || e.e.librarySwitch() || e.e.controller() != cc || e.e.channel() != first->channel()
+                      || e.e.extPort() != first->extPort() || e.e.extChannel() != first->extChannel())
+                        continue;
+                  if (!list.empty() && list.back().first == e.tick)
+                        list.back().second = e.e.value();
+                  else
+                        list.push_back({ e.tick, e.e.value() });
+                  }
+            return list;
+            }
+      // the controller's value in force at tick
+      static int valueAt(const std::vector<std::pair<int, int>>& c, int tick)
+            {
+            int v = -1;
+            for (const auto& p : c)
+                  if (p.first <= tick)
+                        v = p.second;
+            return v;
+            }
+      // a swell in [t1, t2) peaking at peak: values rising (never falling) up to the peak, falling (never rising) after
+      // it, the largest (from its first tick to where it ends: whole CC steps) within slack ticks of it and louder than the
+      // value from t2 (the phrase's end) on
+      static QString checkSwell(const std::vector<std::pair<int, int>>& c, int t1, int t2, int peak, int slack = 60)
+            {
+            const int base = valueAt(c, t2);
+            int maxTick = -1;
+            int maxEnd = -1;
+            int maxValue = -1;
+            int prev = -1;
+            for (const auto& p : c) {
+                  if (p.first < t1 || p.first >= t2)
+                        continue;
+                  if (prev >= 0 && p.first <= peak && p.second < prev)
+                        return QString("falls before the peak at %1: %2 -> %3").arg(p.first).arg(prev).arg(p.second);
+                  if (prev >= 0 && p.first > peak + slack && p.second > prev)
+                        return QString("rises after the peak at %1: %2 -> %3").arg(p.first).arg(prev).arg(p.second);
+                  if (p.second > maxValue) {
+                        maxValue = p.second;
+                        maxTick = p.first;
+                        maxEnd = -1;
+                        }
+                  else if (p.second < maxValue && maxEnd < 0)
+                        maxEnd = p.first;
+                  prev = p.second;
+                  }
+            if (maxEnd < 0)
+                  maxEnd = t2;
+            if (maxValue <= base)
+                  return QString("no swell: after the phrase %1, largest %2").arg(base).arg(maxValue);
+            if (peak < maxTick - slack || peak > maxEnd + slack)
+                  return QString("largest %1 from %2 to %3, the peak at %4").arg(maxValue).arg(maxTick).arg(maxEnd).arg(peak);
+            return QString();
             }
       // MuseScore 3.6's dynamics method: the MS3 playback mode (tst_midi's ms3State)
       static SynthesizerState ms3State()
@@ -127,7 +195,6 @@ class TestPhraseMark : public QObject, public MTest
             lines.sort();
             return lines;
             }
-      struct Ev { int tick; NPlayEvent e; };
       static std::vector<Ev> render(MasterScore* score, std::shared_ptr<SoundLib::Library> library, const SynthesizerState& state = SynthesizerState())
             {
             SoundLib::setCurrent(library);
@@ -191,10 +258,13 @@ class TestPhraseMark : public QObject, public MTest
       void undoRedo();
       void copyPaste();
       void parts();
-      void shapeCurves();
+      void swellCurve();
+      void autoPeakRule();
       void defaultsUnchanged();
-      void shapeBuiltIn();
-      void shapeLibrary();
+      void swellMs3();
+      void swellMs4();
+      void swellPeakMoves();
+      void swellLibrary();
       void ending();
       void endingWrittenWins();
       void shapeEndingSaveLoad();
@@ -413,46 +483,78 @@ void TestPhraseMark::parts()
       }
 
 //---------------------------------------------------------
-//   shapeCurves
-//    0 … 1 of the amount along each Shape; an Arch peaks at the highest note (G5, the 5th of 8 chords: x = 4/7)
+//   swellCurve
+//    the swell's 0 … 1 over the phrase; shapeDb (MuseScore 3's mode) at each chord's start, the phrase from tick 0 to its
+//    last note's end (3840), Peak set and Auto; nothing on a slur that isn't a phrase mark
 //---------------------------------------------------------
 
-void TestPhraseMark::shapeCurves()
+void TestPhraseMark::swellCurve()
       {
       using namespace PhraseMark;
-      QCOMPARE(shapeAt(SHAPE_NONE, 0.5, 0.5), 0.0);
-      QCOMPARE(shapeAt(SHAPE_TOWARD_END, 0.25, 0.5), 0.25);
-      QCOMPARE(shapeAt(SHAPE_TOWARD_START, 0.25, 0.5), 0.75);
-      QCOMPARE(shapeAt(SHAPE_ARCH, 0.0, 0.5), 0.0);
-      QCOMPARE(shapeAt(SHAPE_ARCH, 0.5, 0.5), 1.0);
-      QCOMPARE(shapeAt(SHAPE_ARCH, 0.75, 0.5), 0.5);
-      QCOMPARE(shapeAt(SHAPE_ARCH, 1.0, 0.5), 0.0);
-      QCOMPARE(shapeAt(SHAPE_ARCH, 0.0, 0.0), 1.0);       // (a peak on the first chord: falling from it)
-      QCOMPARE(shapeAt(SHAPE_ARCH, 1.0, 1.0), 1.0);
+      QCOMPARE(shapeAt(0.0, 0.5), 0.0);
+      QCOMPARE(shapeAt(0.5, 0.5), 1.0);
+      QCOMPARE(shapeAt(0.75, 0.5), 0.5);
+      QCOMPARE(shapeAt(1.0, 0.5), 0.0);
+      QCOMPARE(shapeAt(0.2, 0.4), 0.5);
+      QCOMPARE(shapeAt(0.7, 0.4), 0.5);
+      QCOMPARE(shapeAt(0.0, 0.0), 1.0);       // (a peak at the start: falling from it)
+      QCOMPARE(shapeAt(0.5, 0.0), 0.5);
+      QCOMPARE(shapeAt(1.0, 1.0), 1.0);       // (at the end: rising to it)
 
       MasterScore* score = readScore(DIR + "phrasemark.musicxml");
       QVERIFY(score);
       Slur* o = outer(score);
-      QVERIFY(qAbs(archPeak(o) - 4.0 / 7.0) < 1e-12);
       const std::vector<Chord*> c = chords(score);
       QCOMPARE(int(c.size()), 8);
-      // no phrase mark, or no Shape: nothing
-      setShape(o, SHAPE_ARCH, ENDING_NONE);
-      QCOMPARE(shapeDb(c[4], 3.0), 0.0);                  // (not a phrase mark: a slur's Shape doesn't play)
+      setShape(o, SHAPE_SWELL, ENDING_NONE, 25);
+      QCOMPARE(shapeDb(c[2], 3.0), 0.0);                  // (not a phrase mark: a slur's Shape doesn't play)
       mark(o, true);
-      QVERIFY(qAbs(shapeDb(c[4], 3.0) - 3.0) < 1e-12);
-      QVERIFY(qAbs(shapeDb(c[2], 3.0) - 1.5) < 1e-12);    // half way up
+      QVERIFY(qAbs(peakOf(o) - 0.25) < 1e-12);
+      QVERIFY(qAbs(shapeDb(c[2], 3.0) - 3.0) < 1e-12);    // tick 960: 25 % of 3840
+      QVERIFY(qAbs(shapeDb(c[1], 3.0) - 1.5) < 1e-12);    // half way up
+      QVERIFY(qAbs(shapeDb(c[4], 3.0) - 2.0) < 1e-12);    // tick 1920: (1 - 0.5) / 0.75
       QCOMPARE(shapeDb(c[0], 3.0), 0.0);
-      QCOMPARE(shapeDb(c[7], 3.0), 0.0);
-      setShape(o, SHAPE_TOWARD_END, ENDING_NONE);
-      QVERIFY(qAbs(shapeDb(c[7], 3.0) - 3.0) < 1e-12);
-      QVERIFY(qAbs(shapeDb(c[1], 3.0) - 3.0 / 7.0) < 1e-12);
-      setShape(o, SHAPE_TOWARD_START, ENDING_NONE);
+      QVERIFY(qAbs(shapeDb(c[7], 3.0) - 3.0 * (480.0 / 3840.0) / 0.75) < 1e-12);    // (the last note's start: not the end)
+      setShape(o, SHAPE_SWELL, ENDING_NONE, 0);
       QVERIFY(qAbs(shapeDb(c[0], 3.0) - 3.0) < 1e-12);
-      QCOMPARE(shapeDb(c[7], 3.0), 0.0);
-      // two highest notes: the middle (x = 0.5)
-      c[1]->upNote()->setPitch(79);
-      QCOMPARE(archPeak(o), 0.5);
+      setShape(o, SHAPE_NONE, ENDING_NONE, 0);
+      QCOMPARE(shapeDb(c[0], 3.0), 0.0);
+      delete score;
+      }
+
+//---------------------------------------------------------
+//   autoPeakRule
+//    Auto: the highest note's chord when only one chord reaches it and it starts within 25 … 75 % of the phrase (by
+//    ticks, to the last note's end), else the middle
+//---------------------------------------------------------
+
+void TestPhraseMark::autoPeakRule()
+      {
+      using namespace PhraseMark;
+      MasterScore* score = readScore(DIR + "phrasemark.musicxml");
+      QVERIFY(score);
+      Slur* o = outer(score);
+      mark(o, true);
+      setShape(o, SHAPE_SWELL, ENDING_NONE);
+      const std::vector<Chord*> c = chords(score);
+      QCOMPARE(o->phrasePeak(), int(PEAK_AUTO));
+      QCOMPARE(autoPeak(o), 0.5);                         // G5 at 1920 / 3840
+      c[3]->upNote()->setPitch(80);                       // G#5 at 1440: 37.5 %
+      QCOMPARE(autoPeak(o), 0.375);
+      QCOMPARE(peakOf(o), 0.375);
+      c[2]->upNote()->setPitch(81);                       // A5 at 960: 25 %, still inside
+      QCOMPARE(autoPeak(o), 0.25);
+      c[1]->upNote()->setPitch(82);                       // A#5 at 480: 12.5 %, outside: the middle
+      QCOMPARE(autoPeak(o), 0.5);
+      c[1]->upNote()->setPitch(74);
+      c[6]->upNote()->setPitch(83);                       // B5 at 2880: 75 %, inside
+      QCOMPARE(autoPeak(o), 0.75);
+      c[7]->upNote()->setPitch(84);                       // C6 at 3360: 87.5 %, outside
+      QCOMPARE(autoPeak(o), 0.5);
+      c[7]->upNote()->setPitch(83);                       // two chords reach B5: the middle
+      QCOMPARE(autoPeak(o), 0.5);
+      setShape(o, SHAPE_SWELL, ENDING_NONE, 40);          // a Peak set: Auto doesn't matter
+      QCOMPARE(peakOf(o), 0.4);
       delete score;
       }
 
@@ -479,17 +581,17 @@ void TestPhraseMark::defaultsUnchanged()
             return l;
             };
       const QStringList slur = all();
-      setShape(o, PhraseMark::SHAPE_ARCH, PhraseMark::ENDING_BROAD);     // (a slur: nothing)
+      setShape(o, PhraseMark::SHAPE_SWELL, PhraseMark::ENDING_BROAD, 30);     // (a slur: nothing)
       QCOMPARE(all(), slur);
       setShape(o, PhraseMark::SHAPE_NONE, PhraseMark::ENDING_NONE);
       mark(o, true);
       const QStringList plain = all();
-      setShape(o, PhraseMark::SHAPE_TOWARD_END, PhraseMark::ENDING_SLIGHT);
+      setShape(o, PhraseMark::SHAPE_SWELL, PhraseMark::ENDING_SLIGHT);
       QVERIFY(all() != plain);
       setShape(o, PhraseMark::SHAPE_NONE, PhraseMark::ENDING_NONE);
       QCOMPARE(all(), plain);
       // the settings at 0 dB / 100 %: nothing either
-      setShape(o, PhraseMark::SHAPE_ARCH, PhraseMark::ENDING_BROAD);
+      setShape(o, PhraseMark::SHAPE_SWELL, PhraseMark::ENDING_BROAD, 70);
       score->setMetaTag(Playback::metaTag, "phrasing/shapeAmount=0;phrasing/endingBroad=100");
       QCOMPARE(all(), plain);
       score->setMetaTag(Playback::metaTag, QString());
@@ -497,69 +599,157 @@ void TestPhraseMark::defaultsUnchanged()
       }
 
 //---------------------------------------------------------
-//   shapeBuiltIn
-//    MuseScore 4 and 3 modes: each note's velocity by SoundFont 2's law, the Shape's dB at its place (Toward end: 3 dB x
-//    i / 7 on the i-th of the 8 chords); the amount from phrasing/shapeAmount
+//   swellMs3
+//    MuseScore 3's mode (velocity hairpins): each chord's velocity by SoundFont 2's law, the swell's dB at its start
+//    (Peak 25 %: 3 dB x shapeAt on the 8 chords at 0, 480 … 3360 of 0 … 3840); the amount from phrasing/shapeAmount
 //---------------------------------------------------------
 
-void TestPhraseMark::shapeBuiltIn()
+void TestPhraseMark::swellMs3()
       {
       MasterScore* score = readScore(DIR + "phrasemark.musicxml");
       QVERIFY(score);
       score->rebuildMidiMapping();
       mark(outer(score), true);
-      for (const SynthesizerState& state : { SynthesizerState(), ms3State() }) {
-            score->setMetaTag(Playback::metaTag, QString());
-            setShape(outer(score), PhraseMark::SHAPE_NONE, PhraseMark::ENDING_NONE);
-            const std::vector<On> before = noteOns(render(score, nullptr, state));
-            QCOMPARE(int(before.size()), 8);
-            setShape(outer(score), PhraseMark::SHAPE_TOWARD_END, PhraseMark::ENDING_NONE);
-            std::vector<On> after = noteOns(render(score, nullptr, state));
+      const std::vector<On> before = noteOns(render(score, nullptr, ms3State()));
+      QCOMPARE(int(before.size()), 8);
+      setShape(outer(score), PhraseMark::SHAPE_SWELL, PhraseMark::ENDING_NONE, 25);
+      for (double amount : { 3.0, 6.0 }) {
+            score->setMetaTag(Playback::metaTag, QString("phrasing/shapeAmount=%1").arg(amount));
+            const std::vector<On> after = noteOns(render(score, nullptr, ms3State()));
             QCOMPARE(int(after.size()), 8);
             for (size_t i = 0; i < 8; ++i)
-                  QCOMPARE(after[i].velocity, MarcatoLevel::velocity(before[i].velocity, 3.0 * double(i) / 7.0));
-            QVERIFY(after[7].velocity > before[7].velocity);
-            score->setMetaTag(Playback::metaTag, "phrasing/shapeAmount=6");
-            after = noteOns(render(score, nullptr, state));
-            for (size_t i = 0; i < 8; ++i)
-                  QCOMPARE(after[i].velocity, MarcatoLevel::velocity(before[i].velocity, 6.0 * double(i) / 7.0));
+                  QCOMPARE(after[i].velocity, MarcatoLevel::velocity(before[i].velocity, amount * PhraseMark::shapeAt(i * 480.0 / 3840.0, 0.25)));
+            QVERIFY(after[2].velocity > before[2].velocity);
             }
       score->setMetaTag(Playback::metaTag, QString());
       delete score;
       }
 
 //---------------------------------------------------------
-//   shapeLibrary
-//    SSO (the violin's Long, on CC1): the Shape plays as a note level, louder by the dynamics CC (or velocity), the first
-//    note (x = 0) unchanged, each later one louder than without; the level settings after these tests off, the inner slur
-//    removed (the phrase's notes on one technique)
+//   swellMs4
+//    MuseScore 4's mode, a violin (single-note dynamics): the swell as a hairpin, on CC11, inside the held notes:
+//    swell.musicxml, mf, a phrase of two whole notes (G4, E4: 0 … 3840), Auto (the highest note at 0 %: the middle,
+//    1920); the note-ons' velocities as without; CC11 back at mf's after the phrase; 3 dB at the peak by SoundFont 2's
+//    law (mf's CC11 x 10^(3 / 40))
 //---------------------------------------------------------
 
-void TestPhraseMark::shapeLibrary()
+void TestPhraseMark::swellMs4()
+      {
+      MasterScore* score = readScore(DIR + "swell.musicxml");
+      QVERIFY(score);
+      score->rebuildMidiMapping();
+      Slur* o = outer(score);
+      QVERIFY(o);
+      mark(o, true);
+      const std::vector<Ev> plain = render(score, nullptr);
+      const std::vector<std::pair<int, int>> before = curve(plain, CTRL_EXPRESSION);
+      QVERIFY(!before.empty());
+      const int mf = valueAt(before, 0);
+      QVERIFY(mf > 0);
+      setShape(o, PhraseMark::SHAPE_SWELL, PhraseMark::ENDING_NONE);
+      const std::vector<Ev> swelled = render(score, nullptr);
+      const std::vector<std::pair<int, int>> after = curve(swelled, CTRL_EXPRESSION);
+      QVERIFY(after.size() > before.size() + 20);
+      const QString e = checkSwell(after, 0, 3840, 1920);
+      QVERIFY2(e.isEmpty(), qPrintable(e));
+      QCOMPARE(valueAt(after, 0), mf);
+      QCOMPARE(valueAt(after, 1920), std::min(127, int(std::lround(mf * std::pow(10.0, 3.0 / 40.0)))));
+      QCOMPARE(valueAt(after, 3840), mf);
+      // rising inside the first note, falling inside the second
+      QVERIFY(valueAt(after, 480) < valueAt(after, 1440));
+      QVERIFY(valueAt(after, 2400) > valueAt(after, 3360));
+      // the note-ons: the first (at the swell's 0 dB) as without, the second (at its peak) as a note starting there in a
+      // hairpin: MuseScore 4's velocity at the level in force
+      const std::vector<On> on0 = noteOns(plain);
+      const std::vector<On> on1 = noteOns(swelled);
+      QCOMPARE(int(on1.size()), 2);
+      QCOMPARE(int(on0.size()), 2);
+      QCOMPARE(on1[0].velocity, on0[0].velocity);
+      QVERIFY(on1[1].velocity >= on0[1].velocity);
+      // shapeAmount 0: as without
+      score->setMetaTag(Playback::metaTag, "phrasing/shapeAmount=0");
+      QCOMPARE(curve(render(score, nullptr), CTRL_EXPRESSION), before);
+      score->setMetaTag(Playback::metaTag, QString());
+      delete score;
+      }
+
+//---------------------------------------------------------
+//   swellPeakMoves
+//    Peak 0 / 40 / 100 % moves the largest CC11 to 0 / 1536 (inside the first whole note: rising, then falling in it) /
+//    just before 3840; a piano (no single-note dynamics) plays it by velocity at each note's start, as a hairpin
+//---------------------------------------------------------
+
+void TestPhraseMark::swellPeakMoves()
+      {
+      MasterScore* score = readScore(DIR + "swell.musicxml");
+      QVERIFY(score);
+      score->rebuildMidiMapping();
+      Slur* o = outer(score);
+      mark(o, true);
+      const int mf = valueAt(curve(render(score, nullptr), CTRL_EXPRESSION), 0);
+      for (int peak : { 0, 40, 100 }) {
+            setShape(o, PhraseMark::SHAPE_SWELL, PhraseMark::ENDING_NONE, peak);
+            const std::vector<std::pair<int, int>> c = curve(render(score, nullptr), CTRL_EXPRESSION);
+            const int peakTick = 3840 * peak / 100;
+            const QString e = checkSwell(c, 0, 3840, peakTick);
+            QVERIFY2(e.isEmpty(), qPrintable(QString("peak %1: %2").arg(peak).arg(e)));
+            int maxValue = 0;
+            for (const auto& p : c)
+                  if (p.first < 3840)
+                        maxValue = std::max(maxValue, p.second);
+            QCOMPARE(maxValue, std::min(127, int(std::lround(mf * std::pow(10.0, 3.0 / 40.0)))));
+            QCOMPARE(valueAt(c, 3840), mf);
+            if (peak == 40) {
+                  QVERIFY(valueAt(c, 600) < valueAt(c, 1500));          // inside the first note: rising
+                  QVERIFY(valueAt(c, 1600) > valueAt(c, 1900));         // and falling
+                  }
+            if (peak == 0)
+                  QVERIFY(valueAt(c, 0) > mf);
+            if (peak == 100)
+                  QVERIFY(valueAt(c, 3839) > valueAt(c, 1920));
+            }
+      delete score;
+      }
+
+//---------------------------------------------------------
+//   swellLibrary
+//    SSO (the violin's Long, on CC1): the swell on the dynamics CC, as a hairpin's controller events, inside the held
+//    notes (Auto: 1920; Peak 40 %: 1536), with the level settings after these tests off and with [levels] realRange 2 (by
+//    the real players' levels); back to the dynamic's CC1 after the phrase; shapeAmount 0 as without
+//---------------------------------------------------------
+
+void TestPhraseMark::swellLibrary()
       {
       auto lib = sso();
       QVERIFY(lib);
-      MasterScore* score = readScore(DIR + "phrasemark.musicxml");
+      MasterScore* score = readScore(DIR + "swell.musicxml");
       QVERIFY(score);
       score->rebuildMidiMapping();
-      score->startCmd();
-      score->undoRemoveElement(inner(score));
-      score->endCmd();
-      mark(outer(score), true);
-      score->setMetaTag(Playback::metaTag, "levels/sectionBalance=0;levels/realRange=0;levels/micCompensation=0;levels/context=0;"
-                                           "levels/evenLevels=0;levels/calibrated=0;levels/attackLevels=0;slurs/plainPerformance=0");
-      const std::vector<On> before = noteOns(render(score, lib), 1);
-      QCOMPARE(int(before.size()), 8);
-      setShape(outer(score), PhraseMark::SHAPE_TOWARD_END, PhraseMark::ENDING_NONE);
-      const std::vector<On> after = noteOns(render(score, lib), 1);
-      QCOMPARE(int(after.size()), 8);
-      QCOMPARE(after[0].velocity, before[0].velocity);
-      QCOMPARE(after[0].cc, before[0].cc);
-      for (size_t i = 1; i < 8; ++i) {
-            QCOMPARE(after[i].pitch, before[i].pitch);
-            QVERIFY2(after[i].velocity > before[i].velocity || after[i].cc > before[i].cc,
-                     qPrintable(QString("note %1: velocity %2 -> %3, CC1 %4 -> %5").arg(i).arg(before[i].velocity).arg(after[i].velocity)
-                                .arg(before[i].cc).arg(after[i].cc)));
+      Slur* o = outer(score);
+      mark(o, true);
+      const QString off = "levels/sectionBalance=0;levels/micCompensation=0;levels/context=0;levels/evenLevels=0;levels/calibrated=0;"
+                          "levels/attackLevels=0;slurs/plainPerformance=0;heldNotes/early=0;slurs/smoothStart=0;";
+      for (const QString& range : { QString("levels/realRange=0"), QString("levels/realRange=2") }) {
+            score->setMetaTag(Playback::metaTag, off + range);
+            setShape(o, PhraseMark::SHAPE_NONE, PhraseMark::ENDING_NONE);
+            const std::vector<std::pair<int, int>> before = curve(render(score, lib), 1);
+            QVERIFY2(!before.empty(), qPrintable(range));
+            const int mf = valueAt(before, 0);
+            for (int peak : { int(PhraseMark::PEAK_AUTO), 40 }) {
+                  setShape(o, PhraseMark::SHAPE_SWELL, PhraseMark::ENDING_NONE, peak);
+                  const std::vector<std::pair<int, int>> after = curve(render(score, lib), 1);
+                  // (no early starts, set above: the library's events at the written ticks, no start lead)
+                  const int peakTick = peak < 0 ? 1920 : 1536;
+                  const QString e = checkSwell(after, 0, 3840, peakTick);
+                  if (!e.isEmpty() && qEnvironmentVariableIsSet("PHRASE_DUMP"))
+                        for (const auto& p : after)
+                              qDebug("CC1 %d %d", p.first, p.second);
+                  QVERIFY2(e.isEmpty(), qPrintable(QString("%1, peak %2: %3").arg(range).arg(peak).arg(e)));
+                  QVERIFY(valueAt(after, peakTick) > mf);
+                  QCOMPARE(valueAt(after, 3840), mf);
+                  }
+            score->setMetaTag(Playback::metaTag, off + range + ";phrasing/shapeAmount=0");
+            QCOMPARE(curve(render(score, lib), 1), before);
             }
       score->setMetaTag(Playback::metaTag, QString());
       delete score;
@@ -674,12 +864,16 @@ void TestPhraseMark::shapeEndingSaveLoad()
       mark(o, true);
       QVERIFY(saveScore(score, "phraseshape-none.mscx"));
       QVERIFY(fileText("phraseshape-none.mscx").contains("[{&quot;tick&quot;:0,&quot;tick2&quot;:3360,&quot;track&quot;:0,&quot;track2&quot;:0}]"));
-      setShape(o, PhraseMark::SHAPE_ARCH, PhraseMark::ENDING_BROAD);
+      setShape(o, PhraseMark::SHAPE_SWELL, PhraseMark::ENDING_BROAD);
+      QVERIFY(saveScore(score, "phraseshape-auto.mscx"));       // (Auto: no "peak")
+      QVERIFY(fileText("phraseshape-auto.mscx").contains("[{&quot;ending&quot;:2,&quot;shape&quot;:1,&quot;tick&quot;:0,&quot;tick2&quot;:3360,&quot;track&quot;:0,&quot;track2&quot;:0}]"));
+      setShape(o, PhraseMark::SHAPE_SWELL, PhraseMark::ENDING_BROAD, 40);
       QVERIFY(saveScore(score, "phraseshape-saved.mscx"));
       const QString text = fileText("phraseshape-saved.mscx");
-      QVERIFY(text.contains("<metaTag name=\"phraseMarks\">[{&quot;ending&quot;:2,&quot;shape&quot;:1,&quot;tick&quot;:0,&quot;tick2&quot;:3360,&quot;track&quot;:0,&quot;track2&quot;:0}]</metaTag>"));
+      QVERIFY(text.contains("<metaTag name=\"phraseMarks\">[{&quot;ending&quot;:2,&quot;peak&quot;:40,&quot;shape&quot;:1,&quot;tick&quot;:0,&quot;tick2&quot;:3360,&quot;track&quot;:0,&quot;track2&quot;:0}]</metaTag>"));
       QVERIFY(!text.contains("phraseShape"));
       QVERIFY(!text.contains("phraseEnding"));
+      QVERIFY(!text.contains("phrasePeak"));
       QString without = text;
       without.remove(QRegularExpression("\\s*<metaTag name=\"phraseMarks\">[^<]*</metaTag>"));
       QString none = fileText("phraseshape-none.mscx");
@@ -689,7 +883,9 @@ void TestPhraseMark::shapeEndingSaveLoad()
       MasterScore* again = readCreatedScore("phraseshape-saved.mscx");
       QVERIFY(again);
       QVERIFY(outer(again)->phraseMark());
-      QCOMPARE(outer(again)->phraseShape(), int(PhraseMark::SHAPE_ARCH));
+      QCOMPARE(outer(again)->phraseShape(), int(PhraseMark::SHAPE_SWELL));
+      QCOMPARE(outer(again)->phrasePeak(), 40);
+      QCOMPARE(inner(again)->phrasePeak(), int(PhraseMark::PEAK_AUTO));
       QCOMPARE(outer(again)->phraseEnding(), int(PhraseMark::ENDING_BROAD));
       QCOMPARE(inner(again)->phraseShape(), 0);
       again->doLayout();
@@ -724,12 +920,15 @@ void TestPhraseMark::shapeEndingUndo()
       score->doLayout();
       QVERIFY(!o->spannerSegments().empty());
       score->startCmd();
-      o->frontSegment()->undoChangeProperty(Pid::PHRASE_SHAPE, int(PhraseMark::SHAPE_TOWARD_START), PropertyFlags::NOSTYLE);
+      o->frontSegment()->undoChangeProperty(Pid::PHRASE_SHAPE, int(PhraseMark::SHAPE_SWELL), PropertyFlags::NOSTYLE);
+      o->frontSegment()->undoChangeProperty(Pid::PHRASE_PEAK, 60, PropertyFlags::NOSTYLE);
       o->frontSegment()->undoChangeProperty(Pid::PHRASE_ENDING, int(PhraseMark::ENDING_SLIGHT), PropertyFlags::NOSTYLE);
       score->endCmd();
-      QCOMPARE(o->phraseShape(), int(PhraseMark::SHAPE_TOWARD_START));
+      QCOMPARE(o->phraseShape(), int(PhraseMark::SHAPE_SWELL));
       QCOMPARE(o->frontSegment()->getProperty(Pid::PHRASE_ENDING).toInt(), int(PhraseMark::ENDING_SLIGHT));
-      QCOMPARE(partSlur->phraseShape(), int(PhraseMark::SHAPE_TOWARD_START));
+      QCOMPARE(o->frontSegment()->getProperty(Pid::PHRASE_PEAK).toInt(), 60);
+      QCOMPARE(partSlur->phraseShape(), int(PhraseMark::SHAPE_SWELL));
+      QCOMPARE(partSlur->phrasePeak(), 60);
       QCOMPARE(partSlur->phraseEnding(), int(PhraseMark::ENDING_SLIGHT));
       score->doLayout();
       QVERIFY(qAbs(score->tempomap()->tempo(3360) - 1.9) < 1e-9);
@@ -737,16 +936,20 @@ void TestPhraseMark::shapeEndingUndo()
       QCOMPARE(o->phraseShape(), 0);
       QCOMPARE(o->phraseEnding(), 0);
       QCOMPARE(partSlur->phraseEnding(), 0);
+      QCOMPARE(o->phrasePeak(), int(PhraseMark::PEAK_AUTO));
+      QCOMPARE(partSlur->phrasePeak(), int(PhraseMark::PEAK_AUTO));
       QVERIFY(o->phraseMark());
       score->doLayout();
       QCOMPARE(score->tempomap()->tempo(3360), 2.0);
       score->undoRedo(false, 0);
-      QCOMPARE(o->phraseShape(), int(PhraseMark::SHAPE_TOWARD_START));
-      QCOMPARE(partSlur->phraseShape(), int(PhraseMark::SHAPE_TOWARD_START));
+      QCOMPARE(o->phraseShape(), int(PhraseMark::SHAPE_SWELL));
+      QCOMPARE(partSlur->phraseShape(), int(PhraseMark::SHAPE_SWELL));
+      QCOMPARE(partSlur->phrasePeak(), 60);
       score->doLayout();
       QVERIFY(qAbs(score->tempomap()->tempo(3360) - 1.9) < 1e-9);
       QCOMPARE(o->propertyDefault(Pid::PHRASE_SHAPE).toInt(), 0);
       QCOMPARE(o->propertyDefault(Pid::PHRASE_ENDING).toInt(), 0);
+      QCOMPARE(o->propertyDefault(Pid::PHRASE_PEAK).toInt(), int(PhraseMark::PEAK_AUTO));
       delete score;
       }
 
@@ -760,7 +963,7 @@ void TestPhraseMark::shapeEndingCopyPaste()
       MasterScore* score = readScore(DIR + "phrasemark.musicxml");
       QVERIFY(score);
       mark(outer(score), true);
-      setShape(outer(score), PhraseMark::SHAPE_ARCH, PhraseMark::ENDING_BROAD);
+      setShape(outer(score), PhraseMark::SHAPE_SWELL, PhraseMark::ENDING_BROAD, 35);
       Measure* m1 = score->firstMeasure();
       Measure* m2 = m1->nextMeasure();
       Measure* m3 = m2->nextMeasure();
@@ -769,6 +972,7 @@ void TestPhraseMark::shapeEndingCopyPaste()
       QMimeData* mimeData = new QMimeData;
       mimeData->setData(score->selection().mimeType(), score->selection().mimeData());
       QVERIFY(QString::fromUtf8(score->selection().mimeData()).contains("<phraseShape>1</phraseShape>"));
+      QVERIFY(QString::fromUtf8(score->selection().mimeData()).contains("<phrasePeak>35</phrasePeak>"));
       score->select(m3->first(SegmentType::ChordRest)->element(0));
       score->startCmd();
       score->cmdPaste(mimeData, 0);
@@ -777,7 +981,8 @@ void TestPhraseMark::shapeEndingCopyPaste()
       std::vector<Slur*> pasted = slursAt(score, m3->tick().ticks());
       QCOMPARE(int(pasted.size()), 1);
       QVERIFY(pasted[0]->phraseMark());
-      QCOMPARE(pasted[0]->phraseShape(), int(PhraseMark::SHAPE_ARCH));
+      QCOMPARE(pasted[0]->phraseShape(), int(PhraseMark::SHAPE_SWELL));
+      QCOMPARE(pasted[0]->phrasePeak(), 35);
       QCOMPARE(pasted[0]->phraseEnding(), int(PhraseMark::ENDING_BROAD));
       std::vector<Slur*> pastedInner = slursAt(score, m3->tick().ticks() + 2 * DIVISION);
       QCOMPARE(int(pastedInner.size()), 1);

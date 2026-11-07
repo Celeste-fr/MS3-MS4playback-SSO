@@ -24,6 +24,9 @@
 #include "undo.h"
 #include "xml.h"
 
+#include <cmath>
+#include <limits>
+
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
@@ -101,6 +104,159 @@ static ChordRest* searchCR(Segment* segment, int startTrack, int endTrack)
       }
 
 //---------------------------------------------------------
+//   the Swell's peak grip (slur.h › Phrase shape and ending)
+//    on the slur at the peak's place in time: the x of the peak's tick between the ChordRest segments around it (a
+//    peak inside a held note between its start and the next one's), the y of the slur's curve there
+//---------------------------------------------------------
+
+// the system's (tick, page x) points: each ChordRest segment's start, each measure's end
+static std::vector<std::pair<double, qreal>> systemTickPoints(const System* system)
+      {
+      std::vector<std::pair<double, qreal>> points;
+      if (!system)
+            return points;
+      for (const MeasureBase* mb : system->measures()) {
+            if (!mb->isMeasure())
+                  continue;
+            const Measure* m = toMeasure(mb);
+            const qreal mx = m->pagePos().x();
+            for (const Segment* seg = m->first(SegmentType::ChordRest); seg; seg = seg->next(SegmentType::ChordRest))
+                  points.push_back({ double(seg->tick().ticks()), mx + seg->x() });
+            points.push_back({ double(m->endTick().ticks()), mx + m->width() });
+            }
+      return points;
+      }
+
+// the phrase's ticks on this segment: [from, to]
+static void segmentTicks(const SlurSegment* ss, double& from, double& to)
+      {
+      const Slur* sl = ss->slur();
+      const System* system = ss->system();
+      from = ss->isSingleBeginType() ? sl->tick().ticks() : system->firstMeasure()->tick().ticks();
+      to = ss->isSingleEndType() ? PhraseMark::endTick(sl) : system->endTick().ticks();
+      }
+
+QPointF SlurSegment::peakGripPos() const
+      {
+      const qreal nan = std::numeric_limits<qreal>::quiet_NaN();
+      const Slur* sl = slur();
+      if (!system() || !PhraseMark::hasShape(sl))
+            return QPointF(nan, nan);
+      const int t1 = sl->tick().ticks();
+      const int t2 = PhraseMark::endTick(sl);
+      const double tick = t1 + PhraseMark::peakOf(sl) * (t2 - t1);
+      double from, to;
+      segmentTicks(this, from, to);
+      // (on the system where it lies; a peak on a system's last tick is on the next one, unless the phrase ends there)
+      if (tick < from || tick > to || (tick == to && !isSingleEndType()))
+            return QPointF(nan, nan);
+      const std::vector<std::pair<double, qreal>> points = systemTickPoints(system());
+      qreal x = nan;
+      for (size_t i = 0; i + 1 < points.size(); ++i) {
+            const auto& a = points[i];
+            const auto& b = points[i + 1];
+            if (tick >= a.first && tick <= b.first) {
+                  x = b.first > a.first ? a.second + (b.second - a.second) * (tick - a.first) / (b.first - a.first) : b.second;
+                  if (tick < b.first)
+                        break;
+                  }
+            }
+      if (std::isnan(x))
+            return QPointF(nan, nan);
+      // the curve's y at x: its Bézier (page coordinates, as the grips), t found by bisection along x
+      const std::vector<QPointF> g = SlurTieSegment::gripsPositions();
+      const CubicBezier bezier(g[int(Grip::START)], g[int(Grip::BEZIER1)], g[int(Grip::BEZIER2)], g[int(Grip::END)]);
+      const bool rising = g[int(Grip::END)].x() >= g[int(Grip::START)].x();
+      qreal lo = 0.0, hi = 1.0;
+      for (int k = 0; k < 40; ++k) {
+            const qreal mid = (lo + hi) / 2;
+            if ((bezier.pointAtPercent(mid).x() < x) == rising)
+                  lo = mid;
+            else
+                  hi = mid;
+            }
+      return QPointF(x, bezier.pointAtPercent((lo + hi) / 2).y());
+      }
+
+// the Peak (0 … 100 %) whose grip lies at the page x on this segment
+int SlurSegment::peakAtX(qreal pageX) const
+      {
+      const Slur* sl = slur();
+      const int t1 = sl->tick().ticks();
+      const int t2 = PhraseMark::endTick(sl);
+      if (t2 <= t1 || !system())
+            return sl->phrasePeak();
+      double from, to;
+      segmentTicks(this, from, to);
+      const std::vector<std::pair<double, qreal>> points = systemTickPoints(system());
+      double tick = from;
+      for (size_t i = 0; i + 1 < points.size(); ++i) {
+            const auto& a = points[i];
+            const auto& b = points[i + 1];
+            if (pageX >= a.second && pageX <= b.second) {
+                  tick = b.second > a.second ? a.first + (b.first - a.first) * (pageX - a.second) / (b.second - a.second) : a.first;
+                  break;
+                  }
+            if (pageX > b.second)
+                  tick = b.first;
+            }
+      tick = qBound(from, tick, to);
+      return qBound(0, int(std::lround(100.0 * (tick - t1) / (t2 - t1))), 100);
+      }
+
+bool SlurSegment::hasPeakGrip() const
+      {
+      return !std::isnan(peakGripPos().x());
+      }
+
+int SlurSegment::gripsCount() const
+      {
+      return int(Grip::GRIPS) + (hasPeakGrip() ? 1 : 0);
+      }
+
+std::vector<QPointF> SlurSegment::gripsPositions(const EditData& ed) const
+      {
+      std::vector<QPointF> grips = SlurTieSegment::gripsPositions(ed);
+      const QPointF peak = peakGripPos();
+      if (!std::isnan(peak.x()))
+            grips.push_back(peak);
+      return grips;
+      }
+
+void SlurSegment::startEditDrag(EditData& ed)
+      {
+      SlurTieSegment::startEditDrag(ed);
+      _peakDragFrom = ed.curGrip == PEAK_GRIP ? slur()->phrasePeak() : -2;
+      }
+
+void SlurSegment::editDrag(EditData& ed)
+      {
+      if (ed.curGrip != PEAK_GRIP) {
+            SlurTieSegment::editDrag(ed);
+            return;
+            }
+      // (ed.pos: canvas coordinates; the grips' page coordinates are relative to the page)
+      const Element* page = findAncestor(ElementType::PAGE);
+      const int peak = peakAtX(ed.pos.x() - (page ? page->pos().x() : 0.0));
+      if (peak != slur()->phrasePeak())
+            slur()->setProperty(Pid::PHRASE_PEAK, peak);      // (one undo step at the drag's end: endEditDrag)
+      }
+
+void SlurSegment::endEditDrag(EditData& ed)
+      {
+      if (_peakDragFrom != -2) {
+            const int peak = slur()->phrasePeak();
+            if (peak != _peakDragFrom) {
+                  // on the slur, so that its linked copies follow (SlurTieSegment::undoChangeProperty)
+                  slur()->setProperty(Pid::PHRASE_PEAK, _peakDragFrom);
+                  slur()->undoChangeProperty(Pid::PHRASE_PEAK, peak);
+                  }
+            _peakDragFrom = -2;
+            }
+      SlurTieSegment::endEditDrag(ed);
+      }
+
+//---------------------------------------------------------
 //   edit
 //    return true if event is accepted
 //---------------------------------------------------------
@@ -113,6 +269,14 @@ bool SlurSegment::edit(EditData& ed)
             sl->undoChangeProperty(Pid::SLUR_DIRECTION, QVariant::fromValue<Direction>(sl->up() ? Direction::DOWN : Direction::UP));
             sl->layout();
             return true;
+            }
+      if (ed.curGrip == PEAK_GRIP) {
+            // the Swell's peak grip (no offset of its own): Home sets Peak back to Auto; arrows move it (editDrag)
+            if (ed.key == Qt::Key_Home) {
+                  sl->undoChangeProperty(Pid::PHRASE_PEAK, PhraseMark::PEAK_AUTO);
+                  return true;
+                  }
+            return false;
             }
       if (ed.key == Qt::Key_Home) {
             ups(ed.curGrip).off = QPointF();          //TODO
@@ -483,6 +647,7 @@ Slur::Slur(const Slur& s)
       _phraseMark = s._phraseMark;
       _phraseShape = s._phraseShape;
       _phraseEnding = s._phraseEnding;
+      _phrasePeak = s._phrasePeak;
       }
 
 //---------------------------------------------------------
@@ -986,6 +1151,8 @@ void Slur::write(XmlWriter& xml) const
                   xml.tag("phraseShape", _phraseShape);
             if (_phraseEnding)
                   xml.tag("phraseEnding", _phraseEnding);
+            if (_phrasePeak != PhraseMark::PEAK_AUTO)
+                  xml.tag("phrasePeak", _phrasePeak);
             }
       xml.etag();
       }
@@ -1008,6 +1175,10 @@ bool Slur::readProperties(XmlReader& e)
             _phraseEnding = e.readInt();
             return true;
             }
+      if (e.name() == "phrasePeak") {
+            _phrasePeak = qBound(int(PhraseMark::PEAK_AUTO), e.readInt(), 100);
+            return true;
+            }
       return SlurTie::readProperties(e);
       }
 
@@ -1023,6 +1194,8 @@ QVariant Slur::getProperty(Pid propertyId) const
             return _phraseShape;
       if (propertyId == Pid::PHRASE_ENDING)
             return _phraseEnding;
+      if (propertyId == Pid::PHRASE_PEAK)
+            return _phrasePeak;
       return SlurTie::getProperty(propertyId);
       }
 
@@ -1043,6 +1216,13 @@ bool Slur::setProperty(Pid propertyId, const QVariant& v)
       if (propertyId == Pid::PHRASE_SHAPE) {
             _phraseShape = v.toInt();
             score()->setPlaylistDirty();
+            triggerLayout();              // (the peak's grip in edit mode)
+            return true;
+            }
+      if (propertyId == Pid::PHRASE_PEAK) {
+            _phrasePeak = qBound(int(PhraseMark::PEAK_AUTO), v.toInt(), 100);
+            score()->setPlaylistDirty();
+            triggerLayout();
             return true;
             }
       if (propertyId == Pid::PHRASE_ENDING) {
@@ -1064,6 +1244,8 @@ QVariant Slur::propertyDefault(Pid id) const
             return false;
       if (id == Pid::PHRASE_SHAPE || id == Pid::PHRASE_ENDING)
             return 0;
+      if (id == Pid::PHRASE_PEAK)
+            return PhraseMark::PEAK_AUTO;
       return SlurTie::propertyDefault(id);
       }
 
@@ -1438,13 +1620,15 @@ void read(Score* score)
                   }
             if (!found)
                   continue;
-            const int shape = qBound(0, o.value("shape").toInt(0), int(SHAPE_TOWARD_START));
+            const int shape = qBound(0, o.value("shape").toInt(0), int(SHAPE_SWELL));
             const int ending = qBound(0, o.value("ending").toInt(0), int(ENDING_BROAD));
+            const int peak = qBound(int(PEAK_AUTO), o.value("peak").toInt(PEAK_AUTO), 100);
             for (ScoreElement* e : found->linkList()) {
                   if (e->isSlur()) {
                         toSlur(e)->setPhraseMark(true);
                         toSlur(e)->setPhraseShape(shape);
                         toSlur(e)->setPhraseEnding(ending);
+                        toSlur(e)->setPhrasePeak(peak);
                         }
                   }
             }
@@ -1471,6 +1655,8 @@ QString write(const Score* score)
                   o["shape"] = toSlur(s)->phraseShape();
             if (toSlur(s)->phraseEnding())
                   o["ending"] = toSlur(s)->phraseEnding();
+            if (toSlur(s)->phrasePeak() != PEAK_AUTO)
+                  o["peak"] = toSlur(s)->phrasePeak();
             list.append(o);
             }
       return list.isEmpty() ? QString() : QString::fromUtf8(QJsonDocument(list).toJson(QJsonDocument::Compact));
@@ -1482,7 +1668,7 @@ QString write(const Score* score)
 
 bool hasShape(const Slur* slur)
       {
-      return slur && slur->phraseMark() && slur->phraseShape() > SHAPE_NONE && slur->phraseShape() <= SHAPE_TOWARD_START;
+      return slur && slur->phraseMark() && slur->phraseShape() == SHAPE_SWELL;
       }
 
 bool hasEnding(const Slur* slur)
@@ -1490,22 +1676,13 @@ bool hasEnding(const Slur* slur)
       return slur && slur->phraseMark() && slur->phraseEnding() > ENDING_NONE && slur->phraseEnding() <= ENDING_BROAD;
       }
 
-double shapeAt(int shape, double x, double peak)
+double shapeAt(double x, double peak)
       {
       x = qBound(0.0, x, 1.0);
-      switch (shape) {
-            case SHAPE_TOWARD_END:
-                  return x;
-            case SHAPE_TOWARD_START:
-                  return 1.0 - x;
-            case SHAPE_ARCH:
-                  if (x <= peak)
-                        return peak <= 0.0 ? 1.0 : x / peak;
-                  return peak >= 1.0 ? 1.0 : (1.0 - x) / (1.0 - peak);
-            default:
-                  break;
-            }
-      return 0.0;
+      peak = qBound(0.0, peak, 1.0);
+      if (x <= peak)
+            return peak <= 0.0 ? 1.0 : x / peak;
+      return peak >= 1.0 ? 1.0 : (1.0 - x) / (1.0 - peak);
       }
 
 // the chords of the phrase: on the slur's tracks, from its start tick to its end tick
@@ -1525,10 +1702,10 @@ static void forEachChord(const Slur* slur, F f)
             }
       }
 
-double archPeak(const Slur* slur)
+double autoPeak(const Slur* slur)
       {
       const int t1 = slur->tick().ticks();
-      const int t2 = slur->tick2().ticks();
+      const int t2 = endTick(slur);
       if (t2 <= t1)
             return 0.5;
       int highest = -1;
@@ -1544,7 +1721,14 @@ double archPeak(const Slur* slur)
             else if (p == highest && c->tick().ticks() != at)
                   ++count;
             });
-      return count == 1 ? double(at - t1) / double(t2 - t1) : 0.5;
+      const double x = double(at - t1) / double(t2 - t1);
+      return count == 1 && x >= 0.25 - 1e-9 && x <= 0.75 + 1e-9 ? x : 0.5;
+      }
+
+double peakOf(const Slur* slur)
+      {
+      const int p = slur->phrasePeak();
+      return p == PEAK_AUTO ? autoPeak(slur) : qBound(0, p, 100) / 100.0;
       }
 
 double shapeDb(const Chord* chord, double amount)
@@ -1564,13 +1748,12 @@ double shapeDb(const Chord* chord, double amount)
                   continue;
             if (chord->track() != sp->track() && chord->track() != sp->track2())
                   continue;
-            const int t1 = sp->tick().ticks();
-            const int t2 = sp->tick2().ticks();
-            if (tick < t1 || tick > t2 || t2 <= t1)
-                  continue;
             const Slur* slur = toSlur(sp);
-            const double peak = slur->phraseShape() == SHAPE_ARCH ? archPeak(slur) : 0.5;
-            db += amount * shapeAt(slur->phraseShape(), double(tick - t1) / double(t2 - t1), peak);
+            const int t1 = slur->tick().ticks();
+            const int t2 = endTick(slur);
+            if (tick < t1 || tick > slur->tick2().ticks() || t2 <= t1)
+                  continue;
+            db = std::max(db, amount * shapeAt(double(tick - t1) / double(t2 - t1), peakOf(slur)));
             }
       return db;
       }

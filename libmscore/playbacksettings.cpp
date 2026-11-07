@@ -450,10 +450,10 @@ static const std::vector<Definition> DEFINITIONS = {
       // ends on an assumed grid) and Vienna 4x22 (22 pianists); no string / wind / orchestral data with several
       // performers was found, so for those an assumption (docs/PLAYBACK_SETTINGS.md › Phrasing)
       { "phrasing/shapeAmount", 3.3, 0, 12, "dB",
-        "a phrase mark's Shape: how much louder its notes play at the shape's peak (Arch: the phrase's highest note when "
-        "it is the only one that high, else the middle; Toward end: the last note; Toward start: the first), linear in dB "
-        "from 0 at its other ends, on top of the dynamics (MuseScore 3 / 4 parts by velocity, library parts by their note "
-        "level); 0: Shapes change nothing. 3.3 dB: a phrase's peak above its ends, MazurkaBL per-piece median (IQR 1.5-5.1, "
+        "a phrase mark's Swell: how much louder it plays at its Peak (Auto: the phrase's highest note when only one chord "
+        "reaches it and it lies within 25-75 % of the phrase, else the middle), linear in dB from 0 at the phrase's start "
+        "and end, on top of the dynamics, continuous as a hairpin (MuseScore 4 and libraries in the dynamics: CC11, velocity "
+        "or the library's dynamics CC; MuseScore 3 by velocity); 0: Swells change nothing. 3.3 dB: a phrase's peak above its ends, MazurkaBL per-piece median (IQR 1.5-5.1, "
         "n 43 pieces), Vienna 4x22 3.3 / 4.5; piano only; where the peak sits the data disagree (the composer's choice)", true },
       { "phrasing/endingSlight", 87, 50, 100, "%",
         "a phrase mark's Ending Slight: the tempo at the phrase's end, in % of the tempo in force where the slowing starts "
@@ -639,7 +639,7 @@ static const std::vector<Display> DISPLAY = {
         QT_TRANSLATE_NOOP("playbackSettings", "A sudden drop in dynamics inside a slur is sent in small steps, so no release sample plays"), {} },
       // Phrasing
       { "phrasing/shapeAmount", QT_TRANSLATE_NOOP("playbackSettings", "Phrasing"), QT_TRANSLATE_NOOP("playbackSettings", "Shape amount"),
-        QT_TRANSLATE_NOOP("playbackSettings", "How much louder a phrase mark's Shape plays at its peak"), {} },
+        QT_TRANSLATE_NOOP("playbackSettings", "How much louder a phrase mark's swell plays at its peak"), {} },
       { "phrasing/endingSlight", QT_TRANSLATE_NOOP("playbackSettings", "Phrasing"), QT_TRANSLATE_NOOP("playbackSettings", "Slight ending tempo"),
         QT_TRANSLATE_NOOP("playbackSettings", "Tempo at the end of a phrase mark with a slight ending"), {} },
       { "phrasing/endingBroad", QT_TRANSLATE_NOOP("playbackSettings", "Phrasing"), QT_TRANSLATE_NOOP("playbackSettings", "Broad ending tempo"),

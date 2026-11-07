@@ -116,7 +116,7 @@ void SlurTieSegment::spatiumChanged(qreal oldValue, qreal newValue)
 
 std::vector<QPointF> SlurTieSegment::gripsPositions(const EditData&) const
       {
-      const int ngrips = gripsCount();
+      const int ngrips = int(Grip::GRIPS);      // (SlurSegment may add a grip of its own after these: slur.h, PEAK_GRIP)
       std::vector<QPointF> grips(ngrips);
 
       const QPointF p(pagePos());
@@ -218,6 +218,7 @@ QVariant SlurTieSegment::getProperty(Pid propertyId) const
             case Pid::PHRASE_MARK:
             case Pid::PHRASE_SHAPE:
             case Pid::PHRASE_ENDING:
+            case Pid::PHRASE_PEAK:
                   return slurTie()->getProperty(propertyId);
             case Pid::SLUR_UOFF1:
                   return ups(Grip::START).off;
@@ -244,6 +245,7 @@ bool SlurTieSegment::setProperty(Pid propertyId, const QVariant& v)
             case Pid::PHRASE_MARK:
             case Pid::PHRASE_SHAPE:
             case Pid::PHRASE_ENDING:
+            case Pid::PHRASE_PEAK:
                   return slurTie()->setProperty(propertyId, v);
             case Pid::SLUR_UOFF1:
                   ups(Grip::START).off = v.toPointF();
@@ -276,6 +278,7 @@ QVariant SlurTieSegment::propertyDefault(Pid id) const
             case Pid::PHRASE_MARK:
             case Pid::PHRASE_SHAPE:
             case Pid::PHRASE_ENDING:
+            case Pid::PHRASE_PEAK:
                   return slurTie()->propertyDefault(id);
             case Pid::SLUR_UOFF1:
             case Pid::SLUR_UOFF2:
@@ -307,7 +310,7 @@ void SlurTieSegment::reset()
 
 void SlurTieSegment::undoChangeProperty(Pid pid, const QVariant& val, PropertyFlags ps)
       {
-      if (pid == Pid::PHRASE_MARK || pid == Pid::PHRASE_SHAPE || pid == Pid::PHRASE_ENDING) {
+      if (pid == Pid::PHRASE_MARK || pid == Pid::PHRASE_SHAPE || pid == Pid::PHRASE_ENDING || pid == Pid::PHRASE_PEAK) {
             // on the slur, so that its linked copies (parts, linked staves) change with it
             slurTie()->undoChangeProperty(pid, val, ps);
             return;

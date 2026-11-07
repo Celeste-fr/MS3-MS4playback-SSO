@@ -64,6 +64,7 @@
 #include "libmscore/rest.h"
 #include "libmscore/score.h"
 #include "libmscore/segment.h"
+#include "libmscore/slur.h"
 #include "libmscore/slurtie.h"
 #include "libmscore/staff.h"
 #include "libmscore/stafftextbase.h"
@@ -1418,10 +1419,11 @@ InspectorSlurTie::InspectorSlurTie(QWidget* parent)
             };
       // slurs only: a phrase mark plays no legato (libmscore/slur.h)
       const bool slurs = sameTypes && el->isSlurSegment();
-      // (a phrase mark's Shape and Ending: slur.h › Phrase shape and ending; shown while "Phrase mark" is ticked, postInit)
+      // (a phrase mark's Shape, Peak and Ending: slur.h › Phrase shape and ending; shown while "Phrase mark" is ticked, postInit)
       if (slurs) {
             iiList.push_back({ Pid::PHRASE_MARK, 0, s.phraseMark, s.resetPhraseMark });
             iiList.push_back({ Pid::PHRASE_SHAPE, 0, s.phraseShape, s.resetPhraseShape });
+            iiList.push_back({ Pid::PHRASE_PEAK, 0, s.phrasePeak, s.resetPhrasePeak });
             iiList.push_back({ Pid::PHRASE_ENDING, 0, s.phraseEnding, s.resetPhraseEnding });
             }
       s.phraseMark->setVisible(slurs);
@@ -1433,15 +1435,22 @@ InspectorSlurTie::InspectorSlurTie(QWidget* parent)
 
 //---------------------------------------------------------
 //   postInit
-//    Shape and Ending only for phrase marks
+//    Shape, Peak and Ending only for phrase marks, Peak only for a Swell
 //---------------------------------------------------------
 
 void InspectorSlurTie::postInit()
       {
       const bool shown = _slurs && s.phraseMark->isChecked();
       for (QWidget* w : std::initializer_list<QWidget*>{ s.phraseShapeLabel, s.phraseShape, s.resetPhraseShape,
+                                                         s.phrasePeakLabel, s.phrasePeak, s.resetPhrasePeak,
                                                          s.phraseEndingLabel, s.phraseEnding, s.resetPhraseEnding })
             w->setVisible(shown);
+      // (Peak: only for a Swell)
+      const bool swell = s.phraseShape->currentIndex() == PhraseMark::SHAPE_SWELL;
+      s.phrasePeakLabel->setEnabled(swell);
+      s.phrasePeak->setEnabled(swell);
+      if (!swell)
+            s.resetPhrasePeak->setEnabled(false);
       }
 
 //---------------------------------------------------------

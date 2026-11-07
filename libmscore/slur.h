@@ -26,7 +26,10 @@ class SlurSegment final : public SlurTieSegment {
 
    protected:
       qreal _extraHeight = 0.0;
+      int _peakDragFrom { -2 };     // the Swell's peak when its grip's drag started (-2: no such drag)
       void changeAnchor(EditData&, Element*) override;
+      QPointF peakGripPos() const;  // (page coordinates; NaN x: the peak isn't on this segment)
+      int peakAtX(qreal pageX) const;
 
    public:
       SlurSegment(Score* s) : SlurTieSegment(s) {}
@@ -44,6 +47,15 @@ class SlurSegment final : public SlurTieSegment {
 
       Slur* slur() const { return toSlur(spanner()); }
 
+      // a phrase mark's Swell (PhraseMark below): one more grip, at its peak, dragged along the phrase (screen only)
+      static constexpr Grip PEAK_GRIP = Grip(int(Grip::GRIPS));
+      bool hasPeakGrip() const;
+      int gripsCount() const override;
+      std::vector<QPointF> gripsPositions(const EditData& = EditData()) const override;
+      void startEditDrag(EditData&) override;
+      void editDrag(EditData&) override;
+      void endEditDrag(EditData&) override;
+
       void computeBezier(QPointF so = QPointF()) override;
       };
 
@@ -56,6 +68,7 @@ class Slur final : public SlurTie {
       bool _phraseMark { false };   // a phrase mark, not a slur for playback (see PhraseMark below)
       int _phraseShape { 0 };       // a phrase mark's Shape (PhraseMark::Shape) and Ending (PhraseMark::Ending); 0: none
       int _phraseEnding { 0 };
+      int _phrasePeak { -1 };       // its Swell's peak, % of the phrase (PhraseMark::PEAK_AUTO: Auto)
 
       void slurPosChord(SlurPos*);
 
@@ -89,6 +102,8 @@ class Slur final : public SlurTie {
       void setPhraseShape(int v)          { _phraseShape = v; }
       int phraseEnding() const            { return _phraseEnding; }
       void setPhraseEnding(int v)         { _phraseEnding = v; }
+      int phrasePeak() const              { return _phrasePeak; }
+      void setPhrasePeak(int v)           { _phrasePeak = v; }
 
       QVariant getProperty(Pid propertyId) const override;
       bool setProperty(Pid propertyId, const QVariant&) override;
@@ -114,18 +129,28 @@ class Slur final : public SlurTie {
 //   the matching slurs. Copy / paste keeps it (written in the clipboard's XML only).
 //
 //   Phrase shape and ending (the owner approved the design, 2026-11-06/07: "these are the composer's marks"; nothing
-//   is automatic): a phrase mark may carry two more marks, Inspector › Slur › Shape and Ending (shown while "Phrase
-//   mark" is ticked; Pid::PHRASE_SHAPE / PHRASE_ENDING, undoable, linked copies with it; played only while it is a
-//   phrase mark). Stored in the same metaTag entry as "shape" / "ending" (ints, left out when None: a score without
-//   them writes the metaTag as before), and in the clipboard's XML.
-//   - Shape (None, Arch, Toward end, Toward start): a swell of loudness toward the phrase's high point, like a hairpin
-//     pair on top of the dynamics: each chord of the phrase (on the slur's tracks, from its first chord to its last)
-//     plays shapeDb(x) louder, x its place between the first chord's tick (0) and the last chord's (1), linear in dB:
-//     Arch 0 -> A at the peak -> 0 (the peak: the phrase's highest note when it is the only one that high, else the
-//     middle, x = 0.5), Toward end 0 -> A at the last chord, Toward start A at the first chord -> 0. A is the setting
-//     phrasing/shapeAmount (dB). Played as the articulations' levels are (MidiRenderer::levelOf): MuseScore 3 / 4
-//     parts by velocity (SoundFont 2's law), library parts by their per-note level (velocity on velocity techniques,
-//     else CC1 up / CC11 down: libLevels, libraryNoteLevels), so Live's clips and the plain set carry it.
+//   is automatic; the Shape's model 2026-11-07: "I don't like that it only has 3 options", "if you had to pick one note,
+//   then you can't represent swell within one long held note"): a phrase mark may carry more marks, Inspector › Slur ›
+//   Shape, Peak and Ending (shown while "Phrase mark" is ticked; Pid::PHRASE_SHAPE / PHRASE_PEAK / PHRASE_ENDING,
+//   undoable, linked copies with it; played only while it is a phrase mark). Stored in the same metaTag entry as
+//   "shape" / "peak" / "ending" (ints, left out when None / Auto / None: a score without them writes the metaTag as
+//   before), and in the clipboard's XML.
+//   - Shape (None, Swell): a swell of loudness, like a crescendo hairpin to the Peak and a diminuendo from it, on top
+//     of the dynamics. The phrase runs from its first chord's start (0 %) to its last chord's end (100 %, endTick);
+//     the swell is A x s(x) dB, x the place in it by ticks, s rising linearly from 0 at the start to 1 at the peak and
+//     falling to 0 at the end (a peak at 0 % / 100 %: from / to 1 there), so a held note swells inside itself. A is
+//     the setting phrasing/shapeAmount (dB).
+//   - Peak: where the swell is loudest, % of the phrase (0 … 100; it may fall inside a held note), or Auto (-1, the
+//     default): the phrase's highest note when only one chord reaches it and it starts between 25 % and 75 % of the
+//     phrase, else the middle (50 %) (autoPeak). In edit mode a phrase mark with a Swell has one more grip, on the slur
+//     at the peak's place (SlurSegment::PEAK_GRIP), dragged along the phrase to set Peak (one undo step per drag).
+//     Played as a hairpin plays (continuous): MuseScore 4's mode and the libraries put it into the part's dynamics map
+//     (Ms4::Dynamics::build's swells: the expression CC11 on single-note-dynamics instruments, the velocity of every
+//     other note at its start; a library's dynamics CC (CC1), louder by the held note's measured curve, or with
+//     [levels] realRange by the real players' levels, so Live's clips and the plain set carry it as a hairpin's
+//     controller events; MuseScore 3 by SoundFont 2's law); where parts' phrases overlap, the larger swell. MuseScore
+//     3's mode (whose hairpins change velocities) plays each chord's velocity louder by the swell at its start
+//     (shapeDb, SoundFont 2's law).
 //   - Ending (None, Slight, Broad): a slowing at the phrase's end without a written rit.: over the last
 //     phrasing/endingLength beats before the last note's end (from the phrase's start when it is shorter) the tempo
 //     goes from the one in force to phrasing/endingSlight or /endingBroad % of it on the curve phrasing/endingCurve,
@@ -147,20 +172,24 @@ QColor color();
 void read(Score* score);
 QString write(const Score* score);
 
-enum Shape { SHAPE_NONE = 0, SHAPE_ARCH, SHAPE_TOWARD_END, SHAPE_TOWARD_START };
+enum Shape { SHAPE_NONE = 0, SHAPE_SWELL };
 enum Ending { ENDING_NONE = 0, ENDING_SLIGHT, ENDING_BROAD };
+constexpr int PEAK_AUTO = -1;
 
 // the slur plays as a phrase mark with a Shape / an Ending
 bool hasShape(const Slur* slur);
 bool hasEnding(const Slur* slur);
-// 0 … 1 of the amount at x (0: the first chord, 1: the last) of a phrase shaped so, peaking at peak (Arch)
-double shapeAt(int shape, double x, double peak);
-// where an Arch peaks (0 … 1): the highest note's chord when it is the only one that high, else 0.5
-double archPeak(const Slur* slur);
-// how much louder (dB) the chord plays by the Shapes of the phrase marks it is in, amount dB at their peaks
-double shapeDb(const Chord* chord, double amount);
-// the tick where the slur's last chord ends (its Ending's end)
+// 0 … 1 of the amount at x (0: the phrase's start, 1: its end) of a swell peaking at peak (0 … 1)
+double shapeAt(double x, double peak);
+// Auto's peak (0 … 1): the highest note's chord when only one chord reaches it and it starts within 25 … 75 %, else 0.5
+double autoPeak(const Slur* slur);
+// the swell's peak (0 … 1): its Peak, or Auto's
+double peakOf(const Slur* slur);
+// the tick where the slur's last chord ends (its Ending's and its Swell's end)
 int endTick(const Slur* slur);
+// how much louder (dB) the chord plays at its start by the Swells of the phrase marks on its tracks, amount dB at their
+// peaks (the largest where they overlap; MuseScore 3's mode)
+double shapeDb(const Chord* chord, double amount);
 
 }     // namespace PhraseMark
 

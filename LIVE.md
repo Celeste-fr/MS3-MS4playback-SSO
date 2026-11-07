@@ -1293,7 +1293,8 @@ the track mixer; the MuseScore Link device) or be listed below as a difference t
 - **Volume, pan, mute**: Live's track mixer, the same gains.
 - The time: Live plays at the score's first tempo with the notes at their real times (tempo changes, fermatas,
   repeats; phrase marks' Endings, which are in the tempo map: docs/PLAYBACK_SETTINGS.md › Phrase shape and ending).
-- Phrase marks' Shapes: a note level, as an articulation's (velocity, CC1 / CC11), in the clips and the plain set's lanes.
+- Phrase marks' Swells: in the part's dynamics, as a hairpin's: the dynamics CC (CC1) events in the clips and the plain
+  set's lanes (velocity on velocity techniques).
 
 ### What still differs
 

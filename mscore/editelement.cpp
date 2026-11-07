@@ -45,6 +45,12 @@ void ScoreView::updateGrips()
       qreal h   = 8.0 / _matrix.m22();
       QRectF r(-w*.5, -h*.5, w, h);
 
+      // (a slur's grips may change while it is edited: a phrase mark's Swell has a grip at its peak, libmscore/slur.h)
+      if (editData.element->isSlurSegment()) {
+            editData.grips = editData.element->gripsCount();
+            if (int(editData.curGrip) >= editData.grips)
+                  editData.curGrip = editData.element->initialEditModeGrip();
+            }
       editData.grip.resize(editData.grips);
 
       if (editData.grips) {
