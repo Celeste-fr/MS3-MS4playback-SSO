@@ -4473,6 +4473,8 @@ void SoundLibraryOptions::setMetaTag(const char* tag, const QString& value)
       const GoOnPlaying goOn;                       // (other copies may load: at the start again)
       _score->startCmd();
       _score->undo(new ChangeMetaTags(_score, tags));
+      if (QString(tag) == Playback::metaTag)
+            _score->setLayoutAll();                 // (phrase marks' Endings: the tempo map, slur.h › Phrase shape and ending)
       _score->endCmd();
       _score->setPlaylistDirty();
       SoundLibraryHost::routesMayChange();          // (the copies it needs load at the next play)

@@ -215,6 +215,125 @@
         </property>
        </widget>
       </item>
+      <item row="4" column="0">
+       <widget class="QLabel" name="phraseShapeLabel">
+        <property name="text">
+         <string>Shape:</string>
+        </property>
+        <property name="alignment">
+         <set>Qt::AlignLeading|Qt::AlignLeft|Qt::AlignVCenter</set>
+        </property>
+        <property name="buddy">
+         <cstring>phraseShape</cstring>
+        </property>
+       </widget>
+      </item>
+      <item row="4" column="1">
+       <widget class="QComboBox" name="phraseShape">
+        <property name="sizePolicy">
+         <sizepolicy hsizetype="Expanding" vsizetype="Fixed">
+          <horstretch>0</horstretch>
+          <verstretch>0</verstretch>
+         </sizepolicy>
+        </property>
+        <property name="toolTip">
+         <string>Where the phrase swells to its loudest</string>
+        </property>
+        <property name="accessibleName">
+         <string>Shape</string>
+        </property>
+        <item>
+         <property name="text">
+          <string>None</string>
+         </property>
+        </item>
+        <item>
+         <property name="text">
+          <string>Arch</string>
+         </property>
+        </item>
+        <item>
+         <property name="text">
+          <string>Toward end</string>
+         </property>
+        </item>
+        <item>
+         <property name="text">
+          <string>Toward start</string>
+         </property>
+        </item>
+       </widget>
+      </item>
+      <item row="4" column="2">
+       <widget class="Ms::ResetButton" name="resetPhraseShape" native="true">
+        <property name="sizePolicy">
+         <sizepolicy hsizetype="Fixed" vsizetype="Preferred">
+          <horstretch>0</horstretch>
+          <verstretch>0</verstretch>
+         </sizepolicy>
+        </property>
+        <property name="accessibleName">
+         <string>Reset 'Shape' value</string>
+        </property>
+       </widget>
+      </item>
+      <item row="5" column="0">
+       <widget class="QLabel" name="phraseEndingLabel">
+        <property name="text">
+         <string>Ending:</string>
+        </property>
+        <property name="alignment">
+         <set>Qt::AlignLeading|Qt::AlignLeft|Qt::AlignVCenter</set>
+        </property>
+        <property name="buddy">
+         <cstring>phraseEnding</cstring>
+        </property>
+       </widget>
+      </item>
+      <item row="5" column="1">
+       <widget class="QComboBox" name="phraseEnding">
+        <property name="sizePolicy">
+         <sizepolicy hsizetype="Expanding" vsizetype="Fixed">
+          <horstretch>0</horstretch>
+          <verstretch>0</verstretch>
+         </sizepolicy>
+        </property>
+        <property name="toolTip">
+         <string>How much the phrase slows down at its end</string>
+        </property>
+        <property name="accessibleName">
+         <string>Ending</string>
+        </property>
+        <item>
+         <property name="text">
+          <string>None</string>
+         </property>
+        </item>
+        <item>
+         <property name="text">
+          <string>Slight</string>
+         </property>
+        </item>
+        <item>
+         <property name="text">
+          <string>Broad</string>
+         </property>
+        </item>
+       </widget>
+      </item>
+      <item row="5" column="2">
+       <widget class="Ms::ResetButton" name="resetPhraseEnding" native="true">
+        <property name="sizePolicy">
+         <sizepolicy hsizetype="Fixed" vsizetype="Preferred">
+          <horstretch>0</horstretch>
+          <verstretch>0</verstretch>
+         </sizepolicy>
+        </property>
+        <property name="accessibleName">
+         <string>Reset 'Ending' value</string>
+        </property>
+       </widget>
+      </item>
      </layout>
     </widget>
    </item>
@@ -233,6 +352,8 @@
   <tabstop>lineType</tabstop>
   <tabstop>slurDirection</tabstop>
   <tabstop>phraseMark</tabstop>
+  <tabstop>phraseShape</tabstop>
+  <tabstop>phraseEnding</tabstop>
  </tabstops>
  <resources/>
  <connections/>

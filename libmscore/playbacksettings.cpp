@@ -443,6 +443,28 @@ static const std::vector<Definition> DEFINITIONS = {
         "hosted Kontakt: 1 (slots): a patch's copies for other tunings play from one instance, a slot per tuning, each tuned "
         "by Kontakt's own Tune on its own MIDI channel, as in the Live set (one load per patch, ~85-90 MB less a copy); "
         "0 (varispeed): a Kontakt per copy, retuned by varispeed once silent (before 2026-10-15). Also \"slots\" / \"varispeed\"", true },
+      // [phrasing] a phrase mark's Shape and Ending (slur.h › Phrase shape and ending; the owner approved the design,
+      // 2026-11-06/07: the composer's marks, nothing automatic: they act only on phrase marks with a Shape / an Ending,
+      // None by default). Every value below is a PLACEHOLDER, an assumption until the research on phrase-final slowing
+      // and phrase dynamics arrives (another agent's, 2026-11-07); none is measured
+      { "phrasing/shapeAmount", 3, 0, 12, "dB",
+        "a phrase mark's Shape: how much louder its notes play at the shape's peak (Arch: the phrase's highest note when "
+        "it is the only one that high, else the middle; Toward end: the last note; Toward start: the first), linear in dB "
+        "from 0 at its other ends, on top of the dynamics (MuseScore 3 / 4 parts by velocity, library parts by their note "
+        "level); 0: Shapes change nothing. 3 dB is a placeholder, an assumption until researched", true },
+      { "phrasing/endingSlight", 90, 50, 100, "%",
+        "a phrase mark's Ending Slight: the tempo at the phrase's end, in % of the tempo in force where the slowing starts "
+        "(100: none); a placeholder, an assumption until researched", true },
+      { "phrasing/endingBroad", 80, 50, 100, "%",
+        "a phrase mark's Ending Broad: the tempo at the phrase's end, in % of the tempo in force where the slowing starts "
+        "(100: none); a placeholder, an assumption until researched", true },
+      { "phrasing/endingLength", 2, 0.25, 16, "beats",
+        "a phrase mark's Ending slows down over this many beats (the time signature's beat) before its last note's end, "
+        "from the phrase's start when it is shorter; the tempo in force comes back after the phrase; a placeholder, an "
+        "assumption until researched", true },
+      { "phrasing/endingCurve", 0, 0, 4, "",
+        "the curve of a phrase mark's Ending, as a rit. line's change method: 0 linear, 1 exponential, 2 ease-in, "
+        "3 ease-out, 4 ease-in and out; a placeholder, an assumption until researched", true },
       // [live]
       // (measured in Live 12.4.6: 1 and 0 units keep every carrier before its note; 1 is the smallest the range allows:
       // LiveClips::EPSILON, docs/PLAYBACK_SETTINGS.md › Measured by sweeps)
@@ -498,6 +520,7 @@ static const std::vector<const char*> DISPLAY_GROUPS = {
       QT_TRANSLATE_NOOP("playbackSettings", "Note lengths"),
       QT_TRANSLATE_NOOP("playbackSettings", "Slurs"),
       QT_TRANSLATE_NOOP("playbackSettings", "Loudness"),
+      QT_TRANSLATE_NOOP("playbackSettings", "Phrasing"),
       QT_TRANSLATE_NOOP("playbackSettings", "Tuning"),
       QT_TRANSLATE_NOOP("playbackSettings", "Guitar"),
       QT_TRANSLATE_NOOP("playbackSettings", "Ableton Live"),
@@ -609,6 +632,19 @@ static const std::vector<Display> DISPLAY = {
         { QT_TRANSLATE_NOOP("playbackSettings", "Off"), QT_TRANSLATE_NOOP("playbackSettings", "Fixed"), QT_TRANSLATE_NOOP("playbackSettings", "Following") } },
       { "levels/hallGuard", QT_TRANSLATE_NOOP("playbackSettings", "Loudness"), QT_TRANSLATE_NOOP("playbackSettings", "Smooth sudden drops"),
         QT_TRANSLATE_NOOP("playbackSettings", "A sudden drop in dynamics inside a slur is sent in small steps, so no release sample plays"), {} },
+      // Phrasing
+      { "phrasing/shapeAmount", QT_TRANSLATE_NOOP("playbackSettings", "Phrasing"), QT_TRANSLATE_NOOP("playbackSettings", "Shape amount"),
+        QT_TRANSLATE_NOOP("playbackSettings", "How much louder a phrase mark's Shape plays at its peak"), {} },
+      { "phrasing/endingSlight", QT_TRANSLATE_NOOP("playbackSettings", "Phrasing"), QT_TRANSLATE_NOOP("playbackSettings", "Slight ending tempo"),
+        QT_TRANSLATE_NOOP("playbackSettings", "Tempo at the end of a phrase mark with a slight ending"), {} },
+      { "phrasing/endingBroad", QT_TRANSLATE_NOOP("playbackSettings", "Phrasing"), QT_TRANSLATE_NOOP("playbackSettings", "Broad ending tempo"),
+        QT_TRANSLATE_NOOP("playbackSettings", "Tempo at the end of a phrase mark with a broad ending"), {} },
+      { "phrasing/endingLength", QT_TRANSLATE_NOOP("playbackSettings", "Phrasing"), QT_TRANSLATE_NOOP("playbackSettings", "Ending length"),
+        QT_TRANSLATE_NOOP("playbackSettings", "How many beats before the end of the phrase the ending starts to slow down"), {} },
+      { "phrasing/endingCurve", QT_TRANSLATE_NOOP("playbackSettings", "Phrasing"), QT_TRANSLATE_NOOP("playbackSettings", "Ending curve"),
+        QT_TRANSLATE_NOOP("playbackSettings", "How the tempo changes over a phrase mark's ending"),
+        { QT_TRANSLATE_NOOP("playbackSettings", "Linear"), QT_TRANSLATE_NOOP("playbackSettings", "Exponential"), QT_TRANSLATE_NOOP("playbackSettings", "Ease-in"),
+          QT_TRANSLATE_NOOP("playbackSettings", "Ease-out"), QT_TRANSLATE_NOOP("playbackSettings", "Ease-in and out") } },
       // Tuning
       { "tuning/tolerance", QT_TRANSLATE_NOOP("playbackSettings", "Tuning"), QT_TRANSLATE_NOOP("playbackSettings", "Tuning tolerance"),
         QT_TRANSLATE_NOOP("playbackSettings", "A note this close to a copy's tuning plays on that copy"), {} },
@@ -873,7 +909,7 @@ QString iniTemplate()
 //    lifted by the next transition's step, branch bowed-join); levels/attackLevels (0 in both on 2026-10-22, branch attack-levels; 2 in Recommended and by default, 0 in Library
 //    default, since 2026-10-23: the owner heard it, "B better"); shorts/staccatoLength (0 in both on 2026-10-24, branch
 //    staccato-length; 1 in Recommended and by default, 0 in Library default, since the same day: the owner heard the clips, "B");
-//    levels/leading (1 in Recommended and by default, 0 in Library default, since 2026-11-06: the owner, the simple 3.5 dB now); levels/evenKeys (1 in Recommended and by default, 0 in Library default, since 2026-10-28: the owner approved the approach); levels/lowCut (1 in Recommended and by default, 0 in Library default, since 2026-10-30: the owner, the strings' new-bow kick; 2, following, since 2026-10-31: the owner heard it, "yes, much better now"). The other settings are not in the table because: legato/keepMs acts
+//    levels/leading (1 in Recommended and by default, 0 in Library default, since 2026-11-06: the owner, the simple 3.5 dB now); phrasing/shapeAmount, endingSlight, endingBroad (since 2026-11-07, branch phrase-shape: Recommended and the defaults their placeholders 3 dB / 90 % / 80 %, Library default none, 0 dB / 100 % / 100 %; they act only on phrase marks a composer gave a Shape / an Ending; endingLength and endingCurve follow them); levels/evenKeys (1 in Recommended and by default, 0 in Library default, since 2026-10-28: the owner approved the approach); levels/lowCut (1 in Recommended and by default, 0 in Library default, since 2026-10-30: the owner, the strings' new-bow kick; 2, following, since 2026-10-31: the owner heard it, "yes, much better now"). The other settings are not in the table because: legato/keepMs acts
 //    only with early starts (so it follows heldNotes/early); the shorts' lengths are MuseScore 4's note model (not a
 //    timing adjustment of this fork); tuning and hosting are mechanics (how microtones and plug-ins work), not a
 //    choice of sound.
@@ -896,11 +932,13 @@ const std::vector<Preset>& presets()
             { "recommended", QT_TRANSLATE_NOOP("playbackSettings", "Recommended"), { { "heldNotes/early", 100 }, { "heldNotes/byPitch", 0 }, { "levels/calibrated", 2 },
                                               { "slurs/quick", 2 }, { "slurs/quickLevel", 1 }, { "slurs/performance", 1 }, { "slurs/transitions", 1 }, { "slurs/smoothStart", 1 }, { "slurs/transitionsEarly", 1 },
                                               { "slurs/plainPerformance", 1 }, { "slurs/plainTiming", 0 }, { "slurs/speedFromWritten", 0 }, { "slurs/fixedTransitions", 0 }, { "slurs/fastTransitions", 1 }, { "slurs/microtoneBends", 3 }, { "slurs/runBends", 1 }, { "notes/transportReset", 1 }, { "levels/hallGuard", 0 }, { "slurs/plainAccents", 2 }, { "slurs/plainAuto", 1 }, { "levels/context", 1 }, { "levels/sectionBalance", 2 }, { "levels/realRange", 2 },
-                                              { "levels/evenLevels", 1 }, { "levels/micCompensation", 1 }, { "levels/divisi", 1 }, { "levels/transitionLevels", 2 }, { "levels/attackLevels", 2 }, { "levels/evenKeys", 1 }, { "levels/lowCut", 2 }, { "shorts/staccatoLength", 1 }, { "levels/leading", 1 } } },
+                                              { "levels/evenLevels", 1 }, { "levels/micCompensation", 1 }, { "levels/divisi", 1 }, { "levels/transitionLevels", 2 }, { "levels/attackLevels", 2 }, { "levels/evenKeys", 1 }, { "levels/lowCut", 2 }, { "shorts/staccatoLength", 1 }, { "levels/leading", 1 },
+                                              { "phrasing/shapeAmount", 3 }, { "phrasing/endingSlight", 90 }, { "phrasing/endingBroad", 80 } } },
             { "library", QT_TRANSLATE_NOOP("playbackSettings", "Library default"), { { "heldNotes/early", 0 }, { "levels/calibrated", 0 }, { "slurs/quick", 0 },
                                               { "slurs/performance", 0 }, { "slurs/transitions", 0 }, { "slurs/smoothStart", 0 }, { "slurs/transitionsEarly", 0 }, { "slurs/plainPerformance", 0 }, { "slurs/plainTiming", 0 }, { "slurs/speedFromWritten", 0 }, { "slurs/fixedTransitions", 0 }, { "slurs/fastTransitions", 0 }, { "slurs/microtoneBends", 0 }, { "slurs/runBends", 0 }, { "notes/transportReset", 0 }, { "levels/hallGuard", 0 }, { "slurs/plainAccents", 0 }, { "slurs/plainAuto", 0 }, { "levels/context", 0 },
                                               { "levels/sectionBalance", 0 }, { "levels/realRange", 0 },
                                               { "levels/evenLevels", 0 }, { "levels/micCompensation", 0 }, { "levels/divisi", 0 }, { "levels/transitionLevels", 0 }, { "levels/attackLevels", 0 }, { "levels/evenKeys", 0 }, { "levels/lowCut", 0 }, { "shorts/staccatoLength", 0 }, { "levels/leading", 0 },
+                                              { "phrasing/shapeAmount", 0 }, { "phrasing/endingSlight", 100 }, { "phrasing/endingBroad", 100 },
                                               { "guitar/strums", 0 }, { "guitar/softStrums", 0 }, { "guitar/pinchHarmonics", 0 } } },
             };
       return P;

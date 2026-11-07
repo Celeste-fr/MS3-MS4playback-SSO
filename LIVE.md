@@ -1292,7 +1292,8 @@ the track mixer; the MuseScore Link device) or be listed below as a difference t
   0.01 dB; the 1 ms table is the whole difference). A Dynamics lane in the notation's CC1 place, in both.
 - **Volume, pan, mute**: Live's track mixer, the same gains.
 - The time: Live plays at the score's first tempo with the notes at their real times (tempo changes, fermatas,
-  repeats).
+  repeats; phrase marks' Endings, which are in the tempo map: docs/PLAYBACK_SETTINGS.md › Phrase shape and ending).
+- Phrase marks' Shapes: a note level, as an articulation's (velocity, CC1 / CC11), in the clips and the plain set's lanes.
 
 ### What still differs
 

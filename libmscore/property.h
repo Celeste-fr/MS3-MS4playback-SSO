@@ -367,6 +367,8 @@ enum class Pid : short {
       TEMPO_CHANGE_METHOD,
 
       PHRASE_MARK,            // a slur drawn as a phrase mark: no legato (slur.h); not written in the element
+      PHRASE_SHAPE,           // a phrase mark's Shape and Ending (slur.h › Phrase shape and ending); not written in the element
+      PHRASE_ENDING,
 
       MARCATO_LEVEL,          // an articulation's level offset in dB, 0: the library's (articulation.h MarcatoLevel); not written in the element
 

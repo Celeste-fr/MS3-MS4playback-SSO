@@ -420,9 +420,11 @@ class InspectorSlurTie : public InspectorElementBase {
       Q_OBJECT
 
       Ui::InspectorSlur s;
+      bool _slurs { false };
 
    public:
       InspectorSlurTie(QWidget* parent);
+      void postInit() override;
       };
 
 //---------------------------------------------------------

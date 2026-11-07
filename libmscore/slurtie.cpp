@@ -216,6 +216,8 @@ QVariant SlurTieSegment::getProperty(Pid propertyId) const
             case Pid::LINE_TYPE:
             case Pid::SLUR_DIRECTION:
             case Pid::PHRASE_MARK:
+            case Pid::PHRASE_SHAPE:
+            case Pid::PHRASE_ENDING:
                   return slurTie()->getProperty(propertyId);
             case Pid::SLUR_UOFF1:
                   return ups(Grip::START).off;
@@ -240,6 +242,8 @@ bool SlurTieSegment::setProperty(Pid propertyId, const QVariant& v)
             case Pid::LINE_TYPE:
             case Pid::SLUR_DIRECTION:
             case Pid::PHRASE_MARK:
+            case Pid::PHRASE_SHAPE:
+            case Pid::PHRASE_ENDING:
                   return slurTie()->setProperty(propertyId, v);
             case Pid::SLUR_UOFF1:
                   ups(Grip::START).off = v.toPointF();
@@ -270,6 +274,8 @@ QVariant SlurTieSegment::propertyDefault(Pid id) const
             case Pid::LINE_TYPE:
             case Pid::SLUR_DIRECTION:
             case Pid::PHRASE_MARK:
+            case Pid::PHRASE_SHAPE:
+            case Pid::PHRASE_ENDING:
                   return slurTie()->propertyDefault(id);
             case Pid::SLUR_UOFF1:
             case Pid::SLUR_UOFF2:
@@ -301,7 +307,7 @@ void SlurTieSegment::reset()
 
 void SlurTieSegment::undoChangeProperty(Pid pid, const QVariant& val, PropertyFlags ps)
       {
-      if (pid == Pid::PHRASE_MARK) {
+      if (pid == Pid::PHRASE_MARK || pid == Pid::PHRASE_SHAPE || pid == Pid::PHRASE_ENDING) {
             // on the slur, so that its linked copies (parts, linked staves) change with it
             slurTie()->undoChangeProperty(pid, val, ps);
             return;

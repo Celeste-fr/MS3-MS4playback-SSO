@@ -89,6 +89,10 @@ run's spacing following the onsets (Recommended until 2026-10-08); the Preset bo
 `levels/leading` (the Leading lane, below) is 1 in Recommended and by default, 0 in Library default (the owner,
 2026-11-06: "let's do the simple 3.5 dB now, we'll refine as we go"); it acts only where a part's Leading lane is On.
 
+`phrasing/shapeAmount`, `endingSlight`, `endingBroad` (Phrase shape and ending, below) are their placeholders in
+Recommended and by default (3 dB, 90 %, 80 %), none in Library default (0 dB, 100 %, 100 %); they act only on phrase
+marks a composer gave a Shape or an Ending (2026-11-07, branch `phrase-shape`).
+
 `levels/calibrated` 1 (as loud as the held note) is in neither preset since 2026-10-15 (Recommended plays 2, the
 match plus D, real players' difference: option B'): set by hand it shows "(Custom)".
 
@@ -2141,6 +2145,40 @@ researched separately). Header comment of `libmscore/leadinglane.h` has the desi
 - **0 (and a score without a Leading lane) changes nothing**: no lane read for playback, no gain, no CC11 (tests `leadingLevels`, `leadingLive`; dumps of
   Whence and the test scores identical to main's, branch commit message).
 
+## Phrase shape and ending
+
+2026-11-07 (branch `phrase-shape`; the owner approved the design 2026-11-06/07: these are the composer's marks, nothing
+automatic; PRINCIPLES.md › 1). Header comment of `libmscore/slur.h` › Phrase shape and ending has the design.
+
+- **The marks**: a phrase mark (Inspector › Slur › *Phrase mark* ticked) gets two rows, **Shape** (None, Arch, Toward
+  end, Toward start) and **Ending** (None, Slight, Broad), shown only while *Phrase mark* is ticked; None / None by
+  default. Undoable (`Pid::PHRASE_SHAPE`, `Pid::PHRASE_ENDING`, on the slur so its linked copies follow), kept by copy /
+  paste (the clipboard's XML), saved in the phrase mark's entry of the metaTag `phraseMarks` as `"shape"` / `"ending"`
+  (ints, left out when None: a score without them writes the metaTag exactly as before; MuseScore 3.6 keeps the metaTag).
+  A slur that isn't a phrase mark keeps the values but plays none of them.
+- **Shape** (`[phrasing] shapeAmount`, dB, default 3 = **a placeholder, an assumption until the research arrives**): each
+  chord of the phrase (on the slur's tracks, from its first chord to its last) plays A x f(x) dB louder, x its tick's place
+  between the first chord (0) and the last (1), f linear in dB: Arch 0 -> 1 at the peak -> 0, the peak the phrase's highest
+  note when only one chord reaches it, else the middle (x = 0.5); Toward end 0 -> 1 at the last chord; Toward start 1 at
+  the first -> 0. It only adds loudness, on top of the dynamics (as a hairpin pair from the written dynamic). Played as an
+  articulation's level (`MidiRenderer::levelOf` + `phraseDb`, adding up in dB): MuseScore 3 / 4 parts by velocity on
+  SoundFont 2's law (`MarcatoLevel::velocity`), library parts by their note level (a velocity technique by velocity along
+  its measured curve, a CC technique louder by the dynamics CC: `marcatoLevel`, `libLevels`, `libraryNoteLevels`), so
+  Live's clips and the plain set carry it. 0: Shapes change nothing.
+- **Ending** (`[phrasing] endingSlight` 90 %, `endingBroad` 80 %, `endingLength` 2 beats, `endingCurve` 0 linear: **all
+  placeholders, assumptions until the research arrives**): over the last `endingLength` beats (the time signature's beat)
+  before the phrase's last note ends (from the phrase's start when it is shorter) the tempo goes from the one in force to
+  that % of it on the curve (a rit. line's methods: 0 linear, 1 exponential, 2 ease-in, 3 ease-out, 4 ease-in and out), and
+  the tempo in force before comes back where the last note ends. Points in the tempo map a 32nd apart, as a rit. line's
+  (`TempoChange::addToTempoMap`), so everything that follows the tempo follows it: MuseScore 3 / 4, the libraries, Live's
+  clips (notes at their real times) and MIDI export. Endings overlapping in time (the same phrase in several staves) are
+  one slowing (the earliest start, the latest end, the slowest end tempo). **A written tempo change wins**: an Ending that
+  overlaps a rit. / accel. line or has a tempo marking after its start plays none. 100 %: none.
+- **None / None, and the settings at 0 dB / 100 %, change nothing**: tests `tst_phrasemark` (defaultsUnchanged: every event
+  of the MS3 and MS4 modes and SSO and the tempo map; shapeBuiltIn, shapeLibrary, ending, endingWrittenWins,
+  shapeEndingSaveLoad, shapeEndingUndo, shapeEndingCopyPaste); the earlier tests' references (`tst_midi`,
+  `tst_marcatolevel` defaultUnchanged) unchanged.
+
 ## Divisi level
 
 2026-10-20 (branch `divisi-level`; the owner, 2026-10-20, "yes" to playing it as a real orchestra does). `[levels] divisi` (1 by default
@@ -2645,6 +2683,8 @@ Ini key = `[section] key`. "Map" = per-patch data in `share/soundlibraries/Spitf
 | Adjustment | Default | Where it acts | Configure |
 |---|---|---|---|
 | Phrase marks: a slur that plays no legato | per slur | `slur.h` Phrase marks, metaTag `phraseMarks` | per slur (Alt+S, Inspector) |
+| Phrase mark Shape: a phrase mark's notes louder toward its peak (Arch: the highest note if unique, else the middle; Toward end; Toward start), linear in dB from 0 to the amount, on top of the dynamics; built-in by velocity, libraries by their note level (above, Phrase shape and ending) | None per phrase mark; amount 3 dB, a placeholder (Library default: 0 dB) | `slur.h` (`PhraseMark::shapeDb`), `rendermidi.cpp` (`phraseDb`, `levelOf`), metaTag `phraseMarks` (`shape`) | per phrase mark: Inspector › Slur › *Shape*; `[phrasing] shapeAmount` (0 … 12 dB) |
+| Phrase mark Ending: a slowing over the phrase's last beats without a written rit., the tempo in force again after it; a written tempo change wins | None per phrase mark; Slight 90 %, Broad 80 %, over 2 beats, linear: placeholders (Library default: 100 %) | `tempochange.cpp` (`addToTempoMap`, `endingsIn`), metaTag `phraseMarks` (`ending`) | per phrase mark: Inspector › Slur › *Ending*; `[phrasing] endingSlight`, `endingBroad` (50 … 100 %), `endingLength` (0.25 … 16 beats), `endingCurve` (0 … 4) |
 | Level (marcato only until 2026-10-08): an articulation sign, or a staff text that changes the technique, louder or softer than the technique plays (above, Calibrated levels). A note on velocity: the velocity at which its measured curve (dynamics.json) is that many dB away, else SoundFont 2's law 40 log10(v/127); a note on the dynamics CC (SSO's strings' Marcato Attack): softer by CC11 (the held note's expression curve, else the law), louder by CC1 (its own curve, else the law; up to 127), on its route from right before its note-on to right before the route's next note-on; built-in synthesizer (MS3 and MS4 modes): the velocity by the law | "Library default" (0 dB: no change) | `articulation.h` MarcatoLevel, `rendermidi.cpp` (`levelOf`, `marcatoLevel`, `libraryNoteLevels`, `playNote`), `SoundLib::TextState::db`, metaTag `marcatoLevels` | per sign: Inspector › Articulation › *Level*; per text: Inspector › Staff text › *Level* (−35.5 … +35.5 dB, 0.5 steps; several selected: all; the range: above). Until 2026-10-08 −18.5 … +12.5, what SSO's marcatos span (`derived_numbers.py marcato`) |
 | Calibrated levels: 2 (2026-10-15, option B'): a technique on velocity as loud as the part's held note at the same dynamic plus D (real players' difference, map `heldOffset` from `technique_offsets.json`; else its level at velocity 127 less the held note's at 127), plus MuseScore 4's offset for its articulations (marcato's too); with the level rule every slur gain + its section's Spiccato D; 1: without D; 1 and 2: a Performance legato note by CC1 as loud as the held note (2026-10-10) | 2 (Recommended; Library default: 0) | `rendermidi.cpp` `libVelocity`, `SoundLib::calibratedVelocity`; data: dynamics.json per patch, else the shipped `Spitfire Symphony Orchestra.dynamics.json` | `[levels] calibrated`; score: `playbackSettings` |
 | Track delay: a library part (and each of its patches and techniques, added to the part's) plays this many ms later, negative earlier, as Live's Track Delay; every library event of the track moved in time, the tempo followed; with a negative delay everything else (other parts, the metronome) plays later by the earliest one (`libraryDelayLead`), so the track is early from its first note (2026-10-07; before: clamped at the start); likewise a note whose own early start (onset) the score's start would cut: everything later by the most cut, the start lead (not a setting; 2026-10-14); a note and its switch by the technique's sum, and so do the controllers and bends right before it at its tick (its track level's CC11, a dynamic; 2026-10-08), other controllers by the patch's | 0 ms (none) | `trackdelays.h`, `rendermidi.cpp` `libraryTrackDelays`, metaTag `trackDelays` | per part: Mixer › *Track delay*, *Tracks…* (−1000 … 1000 ms: a tutorial's figure for Live, its manual gives none); the plain Live set writes it as TrackDelay and reads it back |

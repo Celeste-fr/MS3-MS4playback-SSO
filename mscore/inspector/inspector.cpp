@@ -1418,12 +1418,30 @@ InspectorSlurTie::InspectorSlurTie(QWidget* parent)
             };
       // slurs only: a phrase mark plays no legato (libmscore/slur.h)
       const bool slurs = sameTypes && el->isSlurSegment();
-      if (slurs)
+      // (a phrase mark's Shape and Ending: slur.h › Phrase shape and ending; shown while "Phrase mark" is ticked, postInit)
+      if (slurs) {
             iiList.push_back({ Pid::PHRASE_MARK, 0, s.phraseMark, s.resetPhraseMark });
+            iiList.push_back({ Pid::PHRASE_SHAPE, 0, s.phraseShape, s.resetPhraseShape });
+            iiList.push_back({ Pid::PHRASE_ENDING, 0, s.phraseEnding, s.resetPhraseEnding });
+            }
       s.phraseMark->setVisible(slurs);
       s.resetPhraseMark->setVisible(slurs);
+      _slurs = slurs;
       const std::vector<InspectorPanel> ppList = { { s.title, s.panel } };
       mapSignals(iiList, ppList);
+      }
+
+//---------------------------------------------------------
+//   postInit
+//    Shape and Ending only for phrase marks
+//---------------------------------------------------------
+
+void InspectorSlurTie::postInit()
+      {
+      const bool shown = _slurs && s.phraseMark->isChecked();
+      for (QWidget* w : std::initializer_list<QWidget*>{ s.phraseShapeLabel, s.phraseShape, s.resetPhraseShape,
+                                                         s.phraseEndingLabel, s.phraseEnding, s.resetPhraseEnding })
+            w->setVisible(shown);
       }
 
 //---------------------------------------------------------

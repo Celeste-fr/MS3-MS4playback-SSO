@@ -153,7 +153,10 @@ class MidiRenderer {
       // every part's technique texts (SoundLib::TextTechniques), for their levels (TextState::db; articulation.h MarcatoLevel)
       std::map<const Part*, SoundLib::TextTechniques> partTexts;
       double textLevel(const Chord* chord) const; // the level of the technique text in effect at the chord, dB
-      double levelOf(const Note* note) const;     // the note's chord's articulations' and its technique text's levels, dB
+      double levelOf(const Note* note) const;     // the note's chord's articulations' and its technique text's levels, dB (and its phrase's Shape)
+      // phrase marks' Shapes (slur.h › Phrase shape and ending): phrasing/shapeAmount, dB at a shape's peak (0: none)
+      double phraseShapeAmount { 0.0 };
+      double phraseDb(const Chord* chord) const;  // how much louder the chord plays by its phrase marks' Shapes, dB
       // each part's Velocity lane (automation.h VELOCITY_TARGET: an Edit-in-MuseScore clip tab's), with points: every
       // note of MuseScore 3's playback shaped by it (playNote), as the MuseScore Link device or the clip's notes do in Live
       std::map<const Part*, Automation::Lane> velocityLanes;

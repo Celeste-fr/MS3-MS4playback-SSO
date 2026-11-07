@@ -984,7 +984,7 @@ void MidiRenderer::collectMeasureEventsSimple(EventMap* events, Measure const * 
                         }
 
                   SndConfig config;       // dummy
-                  config.textLevel = textLevel(chord) + leadingDb(chord);     // ([levels] leading: by velocity)
+                  config.textLevel = textLevel(chord) + leadingDb(chord) + phraseDb(chord);     // ([levels] leading, phrase Shapes: by velocity)
 
                   if (!graceNotesMerged(chord))
                         for (Chord*& c : chord->graceNotesBefore())
@@ -1083,7 +1083,7 @@ void MidiRenderer::collectMeasureEventsDefault(EventMap* events, Measure const *
                   SndConfig config = SndConfig(useSND, controller, sctx.method);
                   auto vl = velocityLanes.find(st1->part());
                   config.velocityLane = vl != velocityLanes.end() ? &vl->second : nullptr;
-                  config.textLevel = textLevel(chord) + leadingDb(chord);     // ([levels] leading: by velocity)
+                  config.textLevel = textLevel(chord) + leadingDb(chord) + phraseDb(chord);     // ([levels] leading, phrase Shapes: by velocity)
 
                   //
                   // Add normal note events
@@ -7880,7 +7880,19 @@ double MidiRenderer::textLevel(const Chord* chord) const
 
 double MidiRenderer::levelOf(const Note* note) const
       {
-      return MarcatoLevel::of(note->chord()) + textLevel(note->chord());
+      return MarcatoLevel::of(note->chord()) + textLevel(note->chord()) + phraseDb(note->chord());
+      }
+
+//---------------------------------------------------------
+//   MidiRenderer::phraseDb
+//    the phrase marks' Shapes (slur.h › Phrase shape and ending): a level of the note's like its articulations', so
+//    MuseScore 3 / 4 play it by velocity and the libraries by their note level (velocity, CC1 / CC11: libLevels), in
+//    Live's clips and the plain set too
+//---------------------------------------------------------
+
+double MidiRenderer::phraseDb(const Chord* chord) const
+      {
+      return phraseShapeAmount > 0.0 ? PhraseMark::shapeDb(chord, phraseShapeAmount) : 0.0;
       }
 
 bool MidiRenderer::leadingAt(const Chord* chord) const
@@ -7924,6 +7936,7 @@ void MidiRenderer::updateState()
             leadingLanes.clear();
             const bool leading = LeadingLane::playing(score);
             leadingBuiltInDb = leading ? LeadingLane::levelDb(score) : 0.0;
+            phraseShapeAmount = Playback::value("phrasing/shapeAmount", score);
             // (Engine lanes: not for Live's clips, nor over MIDI out to a library: the parts play their own engines there)
             const bool engineLanes = !forLiveClips && !(SoundLib::output() == SoundLib::Output::MIDI && SoundLib::current());
             for (const auto& pl : Automation::read(score->masterScore())) {

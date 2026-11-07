@@ -17,6 +17,7 @@
 #include "part.h"
 #include "playability.h"
 #include "score.h"
+#include "segment.h"
 #include "slur.h"
 #include "stem.h"
 #include "system.h"
@@ -480,6 +481,8 @@ Slur::Slur(const Slur& s)
    : SlurTie(s)
       {
       _phraseMark = s._phraseMark;
+      _phraseShape = s._phraseShape;
+      _phraseEnding = s._phraseEnding;
       }
 
 //---------------------------------------------------------
@@ -977,8 +980,13 @@ void Slur::write(XmlWriter& xml) const
       xml.stag(this);
       SlurTie::writeProperties(xml);
       // a phrase mark: in the clipboard only; a file keeps it in the metaTag (PhraseMark)
-      if (_phraseMark && xml.clipboardmode())
+      if (_phraseMark && xml.clipboardmode()) {
             xml.tag("phraseMark", true);
+            if (_phraseShape)
+                  xml.tag("phraseShape", _phraseShape);
+            if (_phraseEnding)
+                  xml.tag("phraseEnding", _phraseEnding);
+            }
       xml.etag();
       }
 
@@ -992,6 +1000,14 @@ bool Slur::readProperties(XmlReader& e)
             _phraseMark = e.readBool();
             return true;
             }
+      if (e.name() == "phraseShape") {
+            _phraseShape = e.readInt();
+            return true;
+            }
+      if (e.name() == "phraseEnding") {
+            _phraseEnding = e.readInt();
+            return true;
+            }
       return SlurTie::readProperties(e);
       }
 
@@ -1003,6 +1019,10 @@ QVariant Slur::getProperty(Pid propertyId) const
       {
       if (propertyId == Pid::PHRASE_MARK)
             return _phraseMark;
+      if (propertyId == Pid::PHRASE_SHAPE)
+            return _phraseShape;
+      if (propertyId == Pid::PHRASE_ENDING)
+            return _phraseEnding;
       return SlurTie::getProperty(propertyId);
       }
 
@@ -1016,6 +1036,19 @@ bool Slur::setProperty(Pid propertyId, const QVariant& v)
             _phraseMark = v.toBool();
             triggerLayout();              // redrawn in its colour
             score()->setPlaylistDirty();  // no legato any more, or legato again
+            if (_phraseEnding)
+                  score()->setLayoutAll();      // its Ending in the tempo map, or out of it (rebuildTempoAndTimeSigMaps)
+            return true;
+            }
+      if (propertyId == Pid::PHRASE_SHAPE) {
+            _phraseShape = v.toInt();
+            score()->setPlaylistDirty();
+            return true;
+            }
+      if (propertyId == Pid::PHRASE_ENDING) {
+            _phraseEnding = v.toInt();
+            score()->setLayoutAll();            // the tempo map (rebuildTempoAndTimeSigMaps)
+            score()->setPlaylistDirty();
             return true;
             }
       return SlurTie::setProperty(propertyId, v);
@@ -1029,6 +1062,8 @@ QVariant Slur::propertyDefault(Pid id) const
       {
       if (id == Pid::PHRASE_MARK)
             return false;
+      if (id == Pid::PHRASE_SHAPE || id == Pid::PHRASE_ENDING)
+            return 0;
       return SlurTie::propertyDefault(id);
       }
 
@@ -1403,9 +1438,15 @@ void read(Score* score)
                   }
             if (!found)
                   continue;
-            for (ScoreElement* e : found->linkList())
-                  if (e->isSlur())
+            const int shape = qBound(0, o.value("shape").toInt(0), int(SHAPE_TOWARD_START));
+            const int ending = qBound(0, o.value("ending").toInt(0), int(ENDING_BROAD));
+            for (ScoreElement* e : found->linkList()) {
+                  if (e->isSlur()) {
                         toSlur(e)->setPhraseMark(true);
+                        toSlur(e)->setPhraseShape(shape);
+                        toSlur(e)->setPhraseEnding(ending);
+                        }
+                  }
             }
       }
 
@@ -1425,9 +1466,121 @@ QString write(const Score* score)
             o["tick2"] = s->tick2().ticks();
             o["track"] = s->track();
             o["track2"] = s->track2();
+            // (Shape and Ending: only when set, so that a score without them writes the metaTag as before)
+            if (toSlur(s)->phraseShape())
+                  o["shape"] = toSlur(s)->phraseShape();
+            if (toSlur(s)->phraseEnding())
+                  o["ending"] = toSlur(s)->phraseEnding();
             list.append(o);
             }
       return list.isEmpty() ? QString() : QString::fromUtf8(QJsonDocument(list).toJson(QJsonDocument::Compact));
+      }
+
+//---------------------------------------------------------
+//   Shape and Ending (slur.h › Phrase shape and ending)
+//---------------------------------------------------------
+
+bool hasShape(const Slur* slur)
+      {
+      return slur && slur->phraseMark() && slur->phraseShape() > SHAPE_NONE && slur->phraseShape() <= SHAPE_TOWARD_START;
+      }
+
+bool hasEnding(const Slur* slur)
+      {
+      return slur && slur->phraseMark() && slur->phraseEnding() > ENDING_NONE && slur->phraseEnding() <= ENDING_BROAD;
+      }
+
+double shapeAt(int shape, double x, double peak)
+      {
+      x = qBound(0.0, x, 1.0);
+      switch (shape) {
+            case SHAPE_TOWARD_END:
+                  return x;
+            case SHAPE_TOWARD_START:
+                  return 1.0 - x;
+            case SHAPE_ARCH:
+                  if (x <= peak)
+                        return peak <= 0.0 ? 1.0 : x / peak;
+                  return peak >= 1.0 ? 1.0 : (1.0 - x) / (1.0 - peak);
+            default:
+                  break;
+            }
+      return 0.0;
+      }
+
+// the chords of the phrase: on the slur's tracks, from its start tick to its end tick
+template <typename F>
+static void forEachChord(const Slur* slur, F f)
+      {
+      const Score* score = slur->score();
+      const Segment* s = score->tick2segment(slur->tick(), true, SegmentType::ChordRest);
+      for (; s && s->tick() <= slur->tick2(); s = s->next1(SegmentType::ChordRest)) {
+            for (int track : { slur->track(), slur->track2() }) {
+                  const Element* e = s->element(track);
+                  if (e && e->isChord())
+                        f(toChord(e));
+                  if (slur->track2() == slur->track())
+                        break;
+                  }
+            }
+      }
+
+double archPeak(const Slur* slur)
+      {
+      const int t1 = slur->tick().ticks();
+      const int t2 = slur->tick2().ticks();
+      if (t2 <= t1)
+            return 0.5;
+      int highest = -1;
+      int count = 0;
+      int at = t1;
+      forEachChord(slur, [&](const Chord* c) {
+            const int p = c->upNote()->ppitch();
+            if (p > highest) {
+                  highest = p;
+                  count = 1;
+                  at = c->tick().ticks();
+                  }
+            else if (p == highest && c->tick().ticks() != at)
+                  ++count;
+            });
+      return count == 1 ? double(at - t1) / double(t2 - t1) : 0.5;
+      }
+
+double shapeDb(const Chord* chord, double amount)
+      {
+      if (amount == 0.0 || !chord)
+            return 0.0;
+      if (chord->isGrace() && chord->parent() && chord->parent()->isChord())
+            chord = toChord(chord->parent());
+      Score* score = chord->score();
+      const int tick = chord->tick().ticks();
+      double db = 0.0;
+      // (a copy: the map's result is shared with any other caller)
+      const auto found = score->spannerMap().findOverlapping(tick, tick);
+      for (const auto& i : found) {
+            const Spanner* sp = i.value;
+            if (!sp->isSlur() || !hasShape(toSlur(sp)))
+                  continue;
+            if (chord->track() != sp->track() && chord->track() != sp->track2())
+                  continue;
+            const int t1 = sp->tick().ticks();
+            const int t2 = sp->tick2().ticks();
+            if (tick < t1 || tick > t2 || t2 <= t1)
+                  continue;
+            const Slur* slur = toSlur(sp);
+            const double peak = slur->phraseShape() == SHAPE_ARCH ? archPeak(slur) : 0.5;
+            db += amount * shapeAt(slur->phraseShape(), double(tick - t1) / double(t2 - t1), peak);
+            }
+      return db;
+      }
+
+int endTick(const Slur* slur)
+      {
+      const Element* e = slur->endElement();
+      if (e && e->isChordRest())
+            return toChordRest(e)->tick().ticks() + toChordRest(e)->actualTicks().ticks();
+      return slur->tick2().ticks();
       }
 
 }     // namespace PhraseMark
