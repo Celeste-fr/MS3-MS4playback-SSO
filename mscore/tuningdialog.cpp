@@ -122,7 +122,8 @@ TuningDialog::TuningDialog(Score* score, QWidget* parent)
       _just->addItem(tr("12 keys, as on a keyboard"), int(Temperament::Just::KEYS));
       _just->addItem(tr("By spelling: Ben Johnston"), int(Temperament::Just::JOHNSTON));
       _just->addItem(tr("By spelling: Helmholtz-Ellis (HEJI)"), int(Temperament::Just::HEJI));
-      _just->setToolTip(tr("How sharps and flats are tuned in just intonation"));
+      _just->setToolTip(tr("Johnston: the root's major scale is pure (1/1 9/8 5/4 4/3 3/2 5/3 15/8); a sharp or flat is 25/24.\n"
+                           "HEJI: pure fifths from the root; each arrow is 81/80."));
       _justLabel = new QLabel(tr("Just intonation:"));
       form->addRow(_justLabel, _just);
 
@@ -131,7 +132,7 @@ TuningDialog::TuningDialog(Score* score, QWidget* parent)
       _quarter->addItem(tr("50 cents (24-EDO)"), int(Temperament::Quarter::FIXED));
       _quarter->addItem(tr("Half a sharp or flat (31-EDO)"), int(Temperament::Quarter::HALF));
       _quarter->addItem(tr("33/32 (53.3 cents)"), int(Temperament::Quarter::JUST));
-      _quarter->setToolTip(tr("Size of quarter-tone accidentals"));
+      _quarter->setToolTip(tr("Size of the Stein-Zimmermann and Gould quarter-tone accidentals"));
       form->addRow(tr("Quarter tones:"), _quarter);
       _persian = new QComboBox;
       _persian->addItem(tr("Vaziri: koron −50, sori +50"), int(Temperament::Persian::VAZIRI));
@@ -155,7 +156,8 @@ TuningDialog::TuningDialog(Score* score, QWidget* parent)
       top->addWidget(finals);
 
       _spelled = new QCheckBox(tr("Distinguish enharmonic spellings"));
-      _spelled->setToolTip(tr("C♯ and D♭ sound different, for tunings built from a chain of fifths"));
+      _spelled->setToolTip(tr("C♯ and D♭ sound different, for tunings built from a chain of fifths. "
+                              "Keyboard temperaments ignore this; just intonation has its own setting."));
       top->addWidget(_spelled);
 
       _oldNotes = new QLabel;

@@ -287,7 +287,7 @@ void InspectorNote::setEvenShown()
       if (!set)
             return;
       if (stale)
-            evenState->setText(tr("Out of date (%1 of %2): use Tools > Even Out Levels…").arg(stale).arg(set));
+            evenState->setText(tr("Out of date (%1 of %2): not played until measured again (Tools > Even Out Levels…)").arg(stale).arg(set));
       else if (unknown)
             evenState->setText(tr("Not checked yet"));
       else

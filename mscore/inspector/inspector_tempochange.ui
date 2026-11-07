@@ -90,7 +90,7 @@
          <string>Tempo at end</string>
         </property>
         <property name="toolTip">
-         <string>Tempo at the end of the line, in percent of the tempo at its start</string>
+         <string>Tempo at the end of the line, in percent of the start. Auto: rit. and rall. 75 %, accel. 133 %.</string>
         </property>
         <property name="specialValueText">
          <string>Auto</string>

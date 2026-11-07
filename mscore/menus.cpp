@@ -1592,6 +1592,9 @@ PalettePanel* MuseScore::newTempoPalettePanel(bool defaultPalettePanel)
             line->setBeginText(QString("<i>%1</i>").arg(g.first));
             line->setContinueText(QString("<i>(%1)</i>").arg(g.first));
             line->setLineStyle(Qt::DashLine);
+            // the text prints; the dashes show greyed on screen only (the owner, 2026-11-06), as any line
+            // with Line visible off: tick it in the Inspector to print them
+            line->setLineVisible(false);
             sp->append(line, qApp->translate("Palette", g.second), QString(), 1.0);
             }
       sp->setMoreElements(false);
