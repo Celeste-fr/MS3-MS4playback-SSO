@@ -204,9 +204,8 @@ int SlurSegment::peakAtX(qreal pageX) const
       return qBound(0, int(std::lround(100.0 * (tick - t1) / (t2 - t1))), 100);
       }
 
-// edit mode: the slur's own grips as every slur's; the Swell's peak grip a filled orange diamond, outlined, 2.5 times
-// their size (its grip rect is, ScoreView::updateGrips), on a short vertical line: it stands out among them and on the
-// selected (blue) slur
+// edit mode: the slur's own grips as every slur's; the Swell's peak grip by drawPeakGrip, which the view calls after the
+// score (ScoreView::paint), so that it lies in front of the slur
 void SlurSegment::drawEditMode(QPainter* p, EditData& ed)
       {
       const int peak = int(PEAK_GRIP);
@@ -218,6 +217,16 @@ void SlurSegment::drawEditMode(QPainter* p, EditData& ed)
       ed.grips = peak;                          // (the base draws the first GRIPS)
       SlurTieSegment::drawEditMode(p, ed);
       ed.grips = grips;
+      }
+
+// the Swell's peak grip: a filled orange diamond, outlined, 2.5 times the other grips' size (its grip rect is,
+// ScoreView::updateGrips), on a short dashed vertical line: it stands out among them and on the selected (blue) slur
+void SlurSegment::drawPeakGrip(QPainter* p, const EditData& ed) const
+      {
+      const int peak = int(PEAK_GRIP);
+      if (ed.grips <= peak || int(ed.grip.size()) <= peak)
+            return;
+      p->save();
       const QRectF r = ed.grip[peak];
       const QPointF c = r.center();
       const qreal hw = r.width() * .5;
@@ -230,6 +239,7 @@ void SlurSegment::drawEditMode(QPainter* p, EditData& ed)
       p->setPen(QPen(MScore::defaultColor, 0.0));
       p->setBrush(ed.curGrip == PEAK_GRIP ? color.darker(130) : color);
       p->drawPolygon(diamond);
+      p->restore();
       }
 
 bool SlurSegment::hasPeakGrip() const
