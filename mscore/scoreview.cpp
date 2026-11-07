@@ -1796,6 +1796,8 @@ void ScoreView::setPhysicalZoomLevel(const qreal physicalLevel)
                   QPointF p(editData.grip[i].center());
                   editData.grip[i] = r.translated(p);
                   }
+            if (editData.element && editData.element->isSlurSegment() && editData.grips > int(SlurSegment::PEAK_GRIP))
+                  editData.grip[int(SlurSegment::PEAK_GRIP)].adjust(-w * .75, -h * .75, w * .75, h * .75);   // (2.5 times the size: editelement.cpp)
             }
       update();
       }

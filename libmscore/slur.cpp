@@ -204,6 +204,34 @@ int SlurSegment::peakAtX(qreal pageX) const
       return qBound(0, int(std::lround(100.0 * (tick - t1) / (t2 - t1))), 100);
       }
 
+// edit mode: the slur's own grips as every slur's; the Swell's peak grip a filled orange diamond, outlined, 2.5 times
+// their size (its grip rect is, ScoreView::updateGrips), on a short vertical line: it stands out among them and on the
+// selected (blue) slur
+void SlurSegment::drawEditMode(QPainter* p, EditData& ed)
+      {
+      const int peak = int(PEAK_GRIP);
+      if (ed.grips <= peak) {
+            SlurTieSegment::drawEditMode(p, ed);
+            return;
+            }
+      const int grips = ed.grips;
+      ed.grips = peak;                          // (the base draws the first GRIPS)
+      SlurTieSegment::drawEditMode(p, ed);
+      ed.grips = grips;
+      const QRectF r = ed.grip[peak];
+      const QPointF c = r.center();
+      const qreal hw = r.width() * .5;
+      const qreal hh = r.height() * .5;
+      const QColor color(0xF08C00);
+      p->setPen(QPen(color, 0.0, Qt::DashLine));
+      p->drawLine(QPointF(c.x(), c.y() - 2.2 * hh), QPointF(c.x(), c.y() + 2.2 * hh));
+      QPolygonF diamond;
+      diamond << QPointF(c.x(), c.y() - hh) << QPointF(c.x() + hw, c.y()) << QPointF(c.x(), c.y() + hh) << QPointF(c.x() - hw, c.y());
+      p->setPen(QPen(MScore::defaultColor, 0.0));
+      p->setBrush(ed.curGrip == PEAK_GRIP ? color.darker(130) : color);
+      p->drawPolygon(diamond);
+      }
+
 bool SlurSegment::hasPeakGrip() const
       {
       return !std::isnan(peakGripPos().x());

@@ -16,6 +16,7 @@
 #include "texttools.h"
 #include "inspector/inspector.h"
 
+#include "libmscore/slur.h"
 #include "libmscore/utils.h"
 #include "libmscore/score.h"
 #include "libmscore/undo.h"
@@ -63,6 +64,11 @@ void ScoreView::updateGrips()
             Element* const page = editData.element->findAncestor(ElementType::PAGE);
             const QPointF pageOffset((page ? page : editData.element)->pos());
 
+            // the Swell's peak grip: 2.5 times the size, so that it stands out among the resize grips (SlurSegment::drawEditMode)
+            if (editData.element->isSlurSegment() && editData.grips > int(SlurSegment::PEAK_GRIP)) {
+                  QRectF& peak = editData.grip[int(SlurSegment::PEAK_GRIP)];
+                  peak.adjust(-w * .75, -h * .75, w * .75, h * .75);
+                  }
             for (QRectF& grip : editData.grip) {
                   grip.translate(pageOffset);
                   score()->addRefresh(grip.adjusted(-dx, -dy, dx, dy));

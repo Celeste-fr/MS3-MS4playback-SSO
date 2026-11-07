@@ -55,6 +55,7 @@ class SlurSegment final : public SlurTieSegment {
       void startEditDrag(EditData&) override;
       void editDrag(EditData&) override;
       void endEditDrag(EditData&) override;
+      void drawEditMode(QPainter*, EditData&) override;
 
       void computeBezier(QPointF so = QPointF()) override;
       };
