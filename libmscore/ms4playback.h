@@ -21,6 +21,8 @@
 #ifndef __MS4PLAYBACK_H__
 #define __MS4PLAYBACK_H__
 
+#include <functional>
+
 #include <map>
 #include <set>
 #include <vector>
@@ -107,8 +109,13 @@ class Dynamics {
       void addTechnique(const StaffTextBase* text, int utick);
       void mergeTracks();
 
+      void addSwells(Score* score, Part* part, const std::function<int(int value, double db, int pitch)>& louder);
+
    public:
-      void build(Score* score, Part* part);
+      // swells: with phrase marks' swells (slur.h › Phrase swell), each its own Amount; louder: the dynamics CC value
+      // (0 … 127) that plays db louder than value at the pitch on this part (none: SoundFont 2's law)
+      void build(Score* score, Part* part, bool swells = false,
+                 const std::function<int(int value, double db, int pitch)>& louder = nullptr);
       int levelAt(int track, int utick) const { return appliable(track, utick); }   // unrolled tick
       const std::map<int, int>& levels() const { return _merged; }     // all tracks' changes (FluidSequencer::updateDynamicEvents)
       bool subitoAt(int tick, int staffIdx) const { return _subito.count({ staffIdx, tick }) > 0; }

@@ -1313,11 +1313,15 @@ void ScoreView::paint(const QRect& r, QPainter& p)
 
       Element* editElement = 0;
       Lasso* lassoToDraw = 0;
+      SlurSegment* peakGripToDraw = nullptr;    // (a phrase mark's peak grip, in front of the score: SlurSegment::drawPeakGrip)
       if (editData.element) {
             switch (state) {
                   case ViewState::NORMAL:
-                        if (editData.element->normalModeEditBehavior() == Element::EditBehavior::Edit)
+                        if (editData.element->normalModeEditBehavior() == Element::EditBehavior::Edit) {
                               editData.element->drawEditMode(&p, editData);
+                              if (editData.element->isSlurSegment())
+                                    peakGripToDraw = toSlurSegment(editData.element);
+                              }
                         break;
                   case ViewState::DRAG:
                   case ViewState::DRAG_OBJECT:
@@ -1335,8 +1339,11 @@ void ScoreView::paint(const QRect& r, QPainter& p)
                   case ViewState::FOTO_LASSO:
                         if (editData.element->isLasso())
                               lassoToDraw = toLasso(editData.element);
-                        else
+                        else {
                               editData.element->drawEditMode(&p, editData);
+                              if (editData.element->isSlurSegment())
+                                    peakGripToDraw = toSlurSegment(editData.element);
+                              }
 
                         if (editData.element->isHarmony())
                               editElement = editData.element;     // do not call paint() method
@@ -1619,6 +1626,8 @@ void ScoreView::paint(const QRect& r, QPainter& p)
       // Draw foto lasso to ensure that it is above everything else
       if (lassoToDraw)
             lassoToDraw->drawEditMode(&p, editData);
+      if (peakGripToDraw)
+            peakGripToDraw->drawPeakGrip(&p, editData);
 
       p.setWorldMatrixEnabled(false);
       if (_score->layoutMode() != LayoutMode::LINE && _score->layoutMode() != LayoutMode::SYSTEM && !r1.isEmpty()) {
@@ -1796,6 +1805,8 @@ void ScoreView::setPhysicalZoomLevel(const qreal physicalLevel)
                   QPointF p(editData.grip[i].center());
                   editData.grip[i] = r.translated(p);
                   }
+            if (editData.element && editData.element->isSlurSegment() && editData.grips > int(SlurSegment::PEAK_GRIP))
+                  editData.grip[int(SlurSegment::PEAK_GRIP)].adjust(-w * .75, -h * .75, w * .75, h * .75);   // (2.5 times the size: editelement.cpp)
             }
       update();
       }
@@ -4565,6 +4576,7 @@ void ScoreView::cmdAddPhraseMark()
             }
       Slur phraseMark(_score);
       phraseMark.setPhraseMark(true);
+      phraseMark.setPhraseAmount(PhraseMark::DEFAULT_AMOUNT);     // (a new phrase mark's swell: slur.h › Phrase swell)
       cmdAddSlur(&phraseMark);
       }
 

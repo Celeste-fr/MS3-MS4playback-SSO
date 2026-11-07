@@ -754,6 +754,8 @@ static const char* const REMOVED[] = {
       "legato/levelHeadroomDb", "shorts/calibratedVelocity", "pedal/upAfterMs", "pedal/downAfterMs", "pedal/upMaxShare",
       "pedal/downMaxShare", "dynamics/evenSteps", "tuning/oneInstance", "tracks/mapDelays",
       "slurs/plainBowed",     // (2026-10-26, branch celli-bowed only: became slurs/plainAuto the same day)
+      // (2026-11-07, branch phrase-shape only: a phrase mark's swell is its own Amount, Ending went: slur.h › Phrase swell)
+      "phrasing/shapeAmount", "phrasing/endingSlight", "phrasing/endingBroad", "phrasing/endingLength", "phrasing/endingCurve",
       };
 
 static bool removed(const QString& id)

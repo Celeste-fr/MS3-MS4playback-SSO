@@ -11,6 +11,7 @@
 #include "ms4playback.h"
 
 #include <cmath>
+#include <set>
 #include <QRegularExpression>
 
 #include "arpeggio.h"
@@ -864,6 +865,118 @@ void Dynamics::addHairpin(Score* score, Hairpin* hairpin, int offset)
             apply(hairpin, spannerTo + offset, nominalLevelTo);
       }
 
+//---------------------------------------------------------
+//   addSwells
+//    Not MuseScore 4: phrase marks' swells (slur.h › Phrase swell), as a crescendo hairpin to the peak and a
+//    diminuendo from it on top of the levels the markings and hairpins set: at the swell's points (every 1/8 beat, at
+//    least 24 a side, the peak, its end) and at every change of those levels inside it, the level whose dynamics CC
+//    value plays A x s(x) dB louder (A: the phrase mark's Amount) (louder: the part's own law, else SoundFont 2's 40 log10), back to the level in force
+//    at the phrase's end. Phrases overlapping in a part: the larger swell (one dynamics CC for the part). At unrolled
+//    ticks, each phrase in the pass where it starts.
+//---------------------------------------------------------
+
+void Dynamics::addSwells(Score* score, Part* part, const std::function<int(int, double, int)>& louder)
+      {
+      struct Swell { int t1; int t2; double peak; int pitch; double amount; };
+      std::vector<Swell> swells;
+      for (const RepeatSegment* rs : score->repeatList()) {
+            const int offset = rs->utick - rs->tick;
+            for (const auto& iv : score->spannerMap().findOverlapping(rs->tick, rs->tick + rs->len() - 1)) {
+                  const Spanner* sp = iv.value;
+                  if (!sp->isSlur() || !PhraseMark::hasSwell(toSlur(sp)) || sp->track() < _strack || sp->track() >= _etrack)
+                        continue;
+                  if (sp->staff() && !sp->staff()->primaryStaff())
+                        continue;                             // linked staves
+                  const Slur* slur = toSlur(sp);
+                  const int t1 = slur->tick().ticks();
+                  const int t2 = PhraseMark::endTick(slur);
+                  if (t1 < rs->tick || t1 >= rs->tick + rs->len() || t2 <= t1)
+                        continue;
+                  // (the phrase's highest note: the pitch the part's law is taken at)
+                  int pitch = -1;
+                  for (const Segment* seg = score->tick2segment(slur->tick(), true, SegmentType::ChordRest);
+                       seg && seg->tick() <= slur->tick2(); seg = seg->next1(SegmentType::ChordRest)) {
+                        for (int track : { slur->track(), slur->track2() }) {
+                              const Element* e = seg->element(track);
+                              if (e && e->isChord())
+                                    pitch = std::max(pitch, toChord(e)->upNote()->ppitch());
+                              }
+                        }
+                  swells.push_back({ t1 + offset, t2 + offset, PhraseMark::peakOf(slur), pitch, slur->phraseAmount() });
+                  }
+            }
+      if (swells.empty())
+            return;
+
+      const auto base = _byTrack;               // (the levels before: the swell goes on top of them)
+      auto baseAt = [&](int track, int tick) {
+            auto t = base.find(track);
+            if (t == base.end())
+                  return NATURAL;
+            auto it = t->second.upper_bound(tick);
+            return it == t->second.begin() ? NATURAL : std::prev(it)->second.level;
+            };
+      std::set<int> ticks;
+      for (const Swell& w : swells) {
+            const int peak = w.t1 + int(std::lround(w.peak * (w.t2 - w.t1)));
+            for (const auto& side : { std::make_pair(w.t1, peak), std::make_pair(peak, w.t2) }) {
+                  const int length = side.second - side.first;
+                  const int n = std::max(24, length / (DIVISION / 8));
+                  for (int i = 0; i <= n && length > 0; ++i)
+                        ticks.insert(side.first + int(std::lround(double(i) * length / n)));
+                  }
+            ticks.insert(w.t1);
+            ticks.insert(peak);
+            ticks.insert(w.t2);
+            for (const auto& t : base)
+                  for (auto it = t.second.upper_bound(w.t1); it != t.second.end() && it->first < w.t2; ++it)
+                        ticks.insert(it->first);
+            }
+      for (int track = _strack; track < _etrack; ++track) {
+            std::map<int, Info>& levels = _byTrack[track];
+            for (int tick : ticks) {
+                  double db = 0.0;
+                  int pitch = -1;
+                  for (const Swell& w : swells) {
+                        if (tick < w.t1 || tick > w.t2)
+                              continue;
+                        const double d = w.amount * PhraseMark::swellAt(double(tick - w.t1) / double(w.t2 - w.t1), w.peak);
+                        if (d > db || pitch < 0) {
+                              db = std::max(db, d);
+                              pitch = w.pitch;
+                              }
+                        }
+                  // (a phrase's end: the level in force without it; its last point is 0 dB unless its peak is there)
+                  bool ends = false;
+                  for (const Swell& w : swells)
+                        ends |= tick == w.t2;
+                  if (ends && db > 0.0) {
+                        bool inside = false;
+                        for (const Swell& w : swells)
+                              inside |= tick >= w.t1 && tick < w.t2;
+                        if (!inside)
+                              db = 0.0;
+                        }
+                  const int level = baseAt(track, tick);
+                  int swelled = level;
+                  if (db > 0.0) {
+                        const int value = expressionLevel(level);
+                        const int v = louder ? louder(value, db, pitch)
+                                             : qBound(0, int(std::lround(value * std::pow(10.0, db / 40.0))), 127);
+                        if (v > value)
+                              swelled = std::max(level, levelOfExpression(v));
+                        }
+                  auto it = levels.find(tick);
+                  if (it != levels.end()) {
+                        it->second.level = swelled;
+                        continue;
+                        }
+                  if (swelled != appliable(track, tick))
+                        levels.emplace(tick, Info { swelled, 0 });
+                  }
+            }
+      }
+
 // PlaybackContext::update: the part's dynamic markings in score order, then its hairpins
 // CompatUtils::replaceStaffTextWithPlayTechniqueAnnotation: a MuseScore 3 staff text that names a
 // technique exactly (or switches to a channel so named) is a playing technique from there on, for the
@@ -900,7 +1013,7 @@ int Dynamics::spannerStop(const Spanner* sp) const
       return it != _clippedStop.end() ? it->second : sp->tick2().ticks();
       }
 
-void Dynamics::build(Score* score, Part* part)
+void Dynamics::build(Score* score, Part* part, bool swells, const std::function<int(int, double, int)>& louder)
       {
       _byTrack.clear();
       _subito.clear();
@@ -965,6 +1078,8 @@ void Dynamics::build(Score* score, Part* part)
 
       for (int track = strack; track < etrack; ++track)
             _byTrack[track].emplace(0, Info { NATURAL, 0 });
+      if (swells)
+            addSwells(score, part, louder);
       mergeTracks();
       if (qEnvironmentVariableIsSet("MS4_DEBUG_DYNAMICS")) {
             for (const auto& t : _byTrack)

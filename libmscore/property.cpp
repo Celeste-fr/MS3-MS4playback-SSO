@@ -359,6 +359,8 @@ static constexpr PropertyMetaData propertyList[] = {
       { Pid::TEMPO_CHANGE_METHOD,       P_TYPE::CHANGE_METHOD,  true,  "tempoChangeMethod",      DUMMY_QT_TRANSLATE_NOOP("propertyName", "tempo change method")                           },
 
       { Pid::PHRASE_MARK,               P_TYPE::BOOL,           true,  "phraseMark",             DUMMY_QT_TRANSLATE_NOOP("propertyName", "phrase mark")                                   },
+      { Pid::PHRASE_AMOUNT,             P_TYPE::REAL,           true,  "phraseAmount",           DUMMY_QT_TRANSLATE_NOOP("propertyName", "phrase amount")                                 },
+      { Pid::PHRASE_PEAK,               P_TYPE::INT,            true,  "phrasePeak",             DUMMY_QT_TRANSLATE_NOOP("propertyName", "phrase peak")                                   },
 
       { Pid::MARCATO_LEVEL,             P_TYPE::REAL,           true,  "marcatoLevel",           DUMMY_QT_TRANSLATE_NOOP("propertyName", "level")                                 },
 

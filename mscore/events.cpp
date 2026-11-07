@@ -562,15 +562,25 @@ void ScoreView::mousePressEvent(QMouseEvent* ev)
                   case ViewState::NORMAL:
                   case ViewState::EDIT:
                   case ViewState::FOTO: {
+                        // (of the grips under the click, the one whose centre is nearest: a phrase mark's peak grip may lie on another)
                         const qreal a = editData.grip[0].width() * 0.5;
+                        int nearest = -1;
+                        qreal nearestDist = 0.0;
                         for (int i = 0; i < editData.grips; ++i) {
                               if (editData.grip[i].adjusted(-a, -a, a, a).contains(editData.startMove)) {
-                                    editData.curGrip = Grip(i);
-                                    updateGrips();
-                                    score()->update();
-                                    gripFound = true;
-                                    break;
+                                    const QPointF d = editData.grip[i].center() - editData.startMove;
+                                    const qreal dist = QPointF::dotProduct(d, d);
+                                    if (nearest < 0 || dist < nearestDist) {
+                                          nearest = i;
+                                          nearestDist = dist;
+                                          }
                                     }
+                              }
+                        if (nearest >= 0) {
+                              editData.curGrip = Grip(nearest);
+                              updateGrips();
+                              score()->update();
+                              gripFound = true;
                               }
 
                         if (!gripFound)

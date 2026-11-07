@@ -984,7 +984,7 @@ void MidiRenderer::collectMeasureEventsSimple(EventMap* events, Measure const * 
                         }
 
                   SndConfig config;       // dummy
-                  config.textLevel = textLevel(chord) + leadingDb(chord);     // ([levels] leading: by velocity)
+                  config.textLevel = textLevel(chord) + leadingDb(chord) + phraseDb(chord);     // ([levels] leading, phrase swells: by velocity)
 
                   if (!graceNotesMerged(chord))
                         for (Chord*& c : chord->graceNotesBefore())
@@ -1083,7 +1083,7 @@ void MidiRenderer::collectMeasureEventsDefault(EventMap* events, Measure const *
                   SndConfig config = SndConfig(useSND, controller, sctx.method);
                   auto vl = velocityLanes.find(st1->part());
                   config.velocityLane = vl != velocityLanes.end() ? &vl->second : nullptr;
-                  config.textLevel = textLevel(chord) + leadingDb(chord);     // ([levels] leading: by velocity)
+                  config.textLevel = textLevel(chord) + leadingDb(chord) + phraseDb(chord);     // ([levels] leading, phrase swells: by velocity)
 
                   //
                   // Add normal note events
@@ -7883,6 +7883,62 @@ double MidiRenderer::levelOf(const Note* note) const
       return MarcatoLevel::of(note->chord()) + textLevel(note->chord());
       }
 
+//---------------------------------------------------------
+//   MidiRenderer::swellLaw
+//    a phrase mark's swell on a part's dynamics CC (slur.h › Phrase swell; Ms4::Dynamics::build): the value
+//    that plays db louder than value at the pitch, as the part's hairpins are heard: a library part with [levels]
+//    realRange by the real players' level (realRangeDb + longLevelDb: what a dynamics CC value plays with it), else by
+//    its held note's measured curve (by ear where measured); none (SoundFont 2's law: MuseScore 4's CC11, the built-in
+//    velocities) for the other parts or without data
+//---------------------------------------------------------
+
+std::function<int(int, double, int)> MidiRenderer::swellLaw(const Part* part) const
+      {
+      auto lpit = libParts.find(part);
+      if (lpit == libParts.end())
+            return nullptr;
+      const LibPart& lp = lpit->second;
+      const SoundLib::Library* plib = lp.library ? lp.library : library.get();
+      if (!plib || plib->dynamicsCC < 0 || plib->dynamicsCC > 127 || plib->dynamicsCC == CTRL_EXPRESSION)
+            return nullptr;
+      const bool rangeOn = ContextLevel::realRange(score);
+      const bool spans = rangeOn && ContextLevel::clarkLuceSpans(score);
+      const SoundLib::LibInstrument* rangePatch = nullptr;
+      for (const SoundLib::LibInstrument* p : lp.patches)
+            if (!rangePatch && rangeOn && ContextLevel::hasRealRange(p))
+                  rangePatch = p;
+      if (rangePatch) {
+            return [rangePatch, spans](int value, double db, int pitch) {
+                  auto heard = [&](int x) { return ContextLevel::realRangeDb(*rangePatch, x, pitch, spans)
+                                                   + ContextLevel::longLevelDb(*rangePatch, x, pitch); };
+                  const double target = heard(value) + db;
+                  for (int x = value; x <= 127; ++x)
+                        if (heard(x) >= target - 1e-9)
+                              return x;
+                  return 127;
+                  };
+            }
+      const std::shared_ptr<const SoundLib::DynamicsCalibration> cal = SoundLib::calibrationFor(plib);
+      const SoundLib::DynamicsCurve* held = cal ? SoundLib::heldCurve(*cal, lp.patches) : nullptr;
+      if (!held || held->points.size() < 2)
+            return nullptr;
+      return [cal, held](int value, double db, int pitch) {
+            return std::max(value, held->atPitch(pitch).louder(value, db));
+            };
+      }
+
+//---------------------------------------------------------
+//   MidiRenderer::phraseDb
+//    the phrase marks' swells (slur.h › Phrase swell) in MuseScore 3's mode, whose hairpins change the
+//    notes' velocities: the chord's velocity louder by the swell at its start (SoundFont 2's law). MuseScore 4's mode
+//    and the libraries play them continuously, in the parts' dynamics maps (updateState, Ms4::Dynamics::build)
+//---------------------------------------------------------
+
+double MidiRenderer::phraseDb(const Chord* chord) const
+      {
+      return PhraseMark::swellDb(chord);
+      }
+
 bool MidiRenderer::leadingAt(const Chord* chord) const
       {
       if (leadingLanes.empty())
@@ -8144,7 +8200,7 @@ void MidiRenderer::updateState()
                   if (qEnvironmentVariableIsSet("MS4_DEBUG_PARTS"))
                         qDebug("MS4PART %s id=%s musicXml=%s family=%d snd=%d", qPrintable(part->partName()), qPrintable(instr->getId()),
                                qPrintable(instr->instrumentId()), int(ctx.family), int(ctx.snd));
-                  ctx.dynamics.build(score, part);
+                  ctx.dynamics.build(score, part, true, swellLaw(part));
                   for (const auto& ip : *part->instruments())
                         ctx.sounds[ip.second] = Ms4::sounds(ip.second);
                   }
