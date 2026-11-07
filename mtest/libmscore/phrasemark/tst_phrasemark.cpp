@@ -179,7 +179,12 @@ class TestPhraseMark : public QObject, public MTest
             }
 
    private slots:
-      void initTestCase() { initMTest(); }
+      // the tests' expectations were written for these [phrasing] values: pinned, so the defaults (piano data) can move
+      void initTestCase() {
+            initMTest();
+            Playback::setIniValuesForTest({ { "phrasing/shapeAmount", "3" }, { "phrasing/endingSlight", "90" },
+                                            { "phrasing/endingBroad", "80" }, { "phrasing/endingLength", "2" } });
+            }
       void playback();
       void gateTimeMs3();
       void saveLoad();
