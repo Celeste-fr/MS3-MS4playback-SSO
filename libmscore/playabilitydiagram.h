@@ -62,7 +62,7 @@ bool namesShown(const DisplayList& items);
 // the diagram for the chord's kind: the fingerboard, the harp's pedals, the timpani, a keyboard hand,
 // a trombone's slide, valve brass fingerings
 DisplayList layoutDiagram(const ChordInfo& info, double w, double h);
-// H1: harpists' pedal diagram (K&G p. 277): a line for the middle notch, a mark per pedal in the
+// H1: harpists' pedal diagram (K&G p. 278): a line for the middle notch, a mark per pedal in the
 // order D C B | E F G A, above the line up (flat), through it middle (natural), below down (sharp);
 // the pedals changed for the chord highlighted
 DisplayList layoutHarpPedals(const ChordInfo& info, double w, double h);

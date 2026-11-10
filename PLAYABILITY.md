@@ -143,7 +143,7 @@ headless test scores and their checked results are the parity tests.
   (`brassType`: `brass.trombone*` tenor / bass / alto / contrabass, `brass.french-horn`, trumpets,
   cornets, flugelhorn, euphonium, baritone, tubas with the key from the name, default BB♭). Lists come
   from Blatter's charts in printed order (first = standard; trombone pp. 469–470, valved brass
-  pp. 463–464, horn pp. 461–462), each fundamental the highest on which every chart entry lies on a
+  pp. 463–468, horn pp. 461–462), each fundamental the highest on which every chart entry lies on a
   partial. Outside a chart the list is derived: partials 2–16, valve steps 2 / 1 / 3 semitones and
   the 4th valve a perfect 4th (the chart's +4 row agrees), no 7th partial on valves; trombone ♯
   positions for the out-of-tune partials 7, 11, 13, 14 (the chart uses ♯ for exactly those). Valve
@@ -284,7 +284,7 @@ headless test scores and their checked results are the parity tests.
   sordino, open, offen …), on trumpets "gestopft" counts as the mute (Adler pp. 322, 333-334, K&G p. 133, Blatter
   p. 143); pizz. (the strings pass's `pizzState`) -> arco; special pizzicati (snap, Bartók, nail, plectrum, pinch,
   buzz, guitar pizz.; pizz. tremolo / gliss. / behind the bridge) -> arco or the ord. family (K&G p. 66); col legno,
-  sul ponticello, sul tasto (each its own) -> ord. family (Adler p. 33, Sevsay p. 41, Blatter pp. 37-38); horn
+  sul ponticello, sul tasto (each its own) -> ord. family (Adler p. 33, Blatter pp. 37-38; col legno also Sevsay p. 41); horn
   stopped / gestopft / chiuso / bouché -> open, offen, aperto (Adler p. 323). Not marked: a technique still on at
   the end, a cancel with nothing to cancel, a second text saying the same at the very tick it was switched on (the
   fast-tests.mscx basses carry a comment text "pizz. 40: …" beside their "pizz."). "(solo and section)". Kind
@@ -329,9 +329,9 @@ headless test scores and their checked results are the parity tests.
   skipped), as the part shows it, i.e. written: with concert pitch on, the stored concert key is transposed back
   with the instrument's interval flipped (`transposeKey`, as `cmdConcertPitchChanged`). Only instruments whose
   transposition changes the key (chromatic not a multiple of 12). R2-RESPELL-7: 7 sharps or flats, write the
-  5-accidental key (Gould p. 252; K&G pp. 90, 117). R2-BB-TO-A / R2-A-TO-BB, not on a key R2-RESPELL-7 marked:
+  5-accidental key (Gould p. 252; K&G p. 90). R2-BB-TO-A / R2-A-TO-BB, not on a key R2-RESPELL-7 marked:
   B♭ clarinets (ids `wind.reed.clarinet`, `.bflat`, `.a`, transposition -2) with 5+ sharps or 6+ flats, A
-  clarinets (-3) with 6+ of either (K&G pp. 89-90, 117, 209); bass and other clarinets are not offered the other
+  clarinets (-3) with 6+ of either (K&G pp. 89-90, 118, 209; the A to B♭ switch p. 90); bass and other clarinets are not offered the other
   instrument. R2-RESPELL-6: instruments in A, D, G (chromatic mod 12 = 9, 2, 7) with 6 flats, in B♭, F, E♭ (10, 5, 3)
   with 6 sharps (Gould p. 252). "Risky" on the first chord after the key signature. Kind `clarinetKey`.
 - String glissando (R3): bowed strings, the tuning in force (`tunedAt`: String Data, scordatura). R3-STRING-NAME: a

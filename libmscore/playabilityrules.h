@@ -192,7 +192,7 @@ QString inspectNatural(const StringInstrument& in, const std::vector<HarmonicNot
 //     over 4 bars (8 quarters) at pp–mf, "a bow for each measure" (4 quarters) at f, ff; "in faster tempos
 //     these four measures could be played in one bow" (16 quarters) at pp–mf, "in rapid tempos two bows"
 //     (8 quarters) at f, ff. Faster = above ♩ = 72, his printed andante (Fig. I-15): our reading. Never red.
-//     Forsyth p. 343 and Widor p. 163 (4 bars at pp in "moderato") print no tempo and agree with Wagner.
+//     Forsyth p. 343 (4 bars at pp in "moderato") and Widor p. 162 (4 bars at ppp) print no tempo and agree with Wagner.
 //   Violin and viola, single player: Sevsay p. 10 and 15 s at every tier (Flesch p. 64: a spun note
 //     "varies between 1 and 15 seconds"; Askenfelt 1986 p. 1011: slowest steady bow about 15 s). Never red.
 //   Viola as violin: Sevsay and Forsyth say shorter but print no number (a miss, never a false alarm).
@@ -338,15 +338,15 @@ bool harpLeftFoot(int letter);
 int keyAlter(int fifths, int letter);
 QString letterName(int letter, int alter);           // "Cb", "F#", "D"
 // the same pitch on a neighbouring letter, a single accidental at most (Cb = B, F = E#, F# = Gb);
-// empty for D, G and A, which have none (Kennan & Grantham p. 278), and for double accidentals
+// empty for D, G and A, which have none (Kennan & Grantham p. 279), and for double accidentals
 QString harpEnharmonic(int letter, int alter);
-// H2: more notes in one hand at once is red (Blatter p. 256, K&G p. 281); a chord wider than a
-// 10th in one hand a warning: ten strings, both ends counted (Blatter p. 256, K&G p. 281)
+// H2: more notes in one hand at once is red (Blatter p. 256, K&G p. 282); a chord wider than a
+// 10th in one hand a warning: ten strings, both ends counted (Blatter p. 256, K&G p. 282)
 constexpr int HARP_HAND_NOTES = 4;
 constexpr int HARP_HAND_STRINGS = 10;
 
 //---------------------------------------------------------
-//   P1 timpani: drum ranges (Adler p. 445 Ex 12-24, K&G p. 227 Ex 13.1, Blatter p. 211 Ex 5.4),
+//   P1 timpani: drum ranges (Adler p. 445 Ex 12-24, K&G p. 228 Ex 13.1, Blatter p. 211 Ex 5.4),
 //   four drums, a fifth (the 20″ piccolo) only when the part names one; 15 s to retune a drum
 //   (Blatter p. 210)
 //---------------------------------------------------------
@@ -378,7 +378,7 @@ struct TimpaniPlan {
       std::vector<std::vector<TimpaniNotePlan>> moments;
       std::vector<std::vector<int>> tuning;          // per moment, per drum after it: pitch or -1
       };
-// The planner (K&G p. 227, Blatter p. 211): a pitch goes to a free drum already tuned to it; else
+// The planner (K&G p. 228, Blatter p. 211): a pitch goes to a free drum already tuned to it; else
 // to a free drum whose range holds it, choosing (1) one that leaves TIMPANI_RETUNE_SECONDS from its
 // last note to this one (a drum not yet used always does), (2) a drum not yet used, so a tuned
 // drum keeps its tuning, (3) the drum whose middle is nearest the pitch, (4) the larger drum.
@@ -404,7 +404,7 @@ bool isTimpani(const QString& instrumentId, const QString& name);
 //---------------------------------------------------------
 //   B4-B6 trombone slide, valve brass fingerings: the owner's approved spec (diagrams-spec-brass.md,
 //   2026-10-08). The lists come from Blatter's charts (playabilitybrass.h, generated): trombone
-//   pp. 469-470, valved brass pp. 463-464, horn pp. 461-462; where a chart covers a note its entries
+//   pp. 469-470, valved brass pp. 463-468, horn pp. 461-462; where a chart covers a note its entries
 //   are the list, in printed order, the first the standard one. Outside a chart's range the list is
 //   derived: partials 2-16 (Adler p. 299, BR1) of each valve combination's or position's fundamental,
 //   valve steps 2 / 1 / 3 semitones (Adler p. 303, Blatter p. 459), the 4th valve a perfect 4th (the chart's +4 row
@@ -437,7 +437,7 @@ constexpr int ATTACH_F = 1;
 constexpr int ATTACH_E = 2;
 // a text naming the valves ("4 valves", "five-valve"): their count, else 0
 int brassValveText(const QString& text);
-// the valves assumed without a text: trumpet group 3 (Adler p. 335; Sevsay p. 93), euphonium 4
+// the valves assumed without a text: trumpet group 3 (Adler p. 335; Sevsay p. 94), euphonium 4
 // (Adler p. 354; Sevsay p. 109), baritone 3 (Sevsay p. 109), tubas 4 (Sevsay p. 109; Kennan &
 // Grantham, tuba section), horn 3 and the thumb
 int brassValves(Brass b);
@@ -518,7 +518,7 @@ constexpr const char* N1_BRASS_MUTE_OFF = "senza\\s+sord(?:ino|ina|\\.)|open|off
 constexpr const char* N1_SPECIAL_PIZZ_ON = "(?:snap|bart[oó]k|nail|plectrum|pinch|buzz|guitar)\\s+pizz(?:\\.|icato)?|"
                                            "pizz(?:\\.|icato)?\\s+(?:trem(?:olo|\\.)|gliss(?:ando|\\.)|behind\\s+the\\s+bridge)";
 constexpr const char* N1_SPECIAL_PIZZ_OFF = "arco";
-// col legno, sul ponticello, sul tasto -> ord. (Adler p. 33; Sevsay p. 41; Blatter pp. 37-38)
+// col legno, sul ponticello, sul tasto -> ord. (Adler p. 33; Blatter pp. 37-38; col legno also Sevsay p. 41)
 constexpr const char* N1_COL_LEGNO_ON = "col\\s+legno(?:\\s+(?:battuto|tratto))?";
 constexpr const char* N1_PONT_ON = "sul\\s+pont(?:icello|\\.)";
 constexpr const char* N1_TASTO_ON = "sul\\s+tasto";
@@ -557,11 +557,11 @@ constexpr int R1_MAX_PER_HAND = 2;
 // R1-SPAN: one hand's two mallets at most an octave apart (Kennan & Grantham p. 238; Sevsay p. 147)
 constexpr int R1_HAND_SPAN_MAX = 12;                // semitones; more is marked
 
-// R2 written key signature of a transposing part (Kennan & Grantham pp. 89-90, 117, 209; Gould p. 252)
+// R2 written key signature of a transposing part (Kennan & Grantham pp. 89-90, 118, 209; Gould p. 252)
 constexpr int R2_BB_TO_A_SHARPS = 5;                // B♭ clarinet: 5+ sharps -> A clarinet (K&G pp. 89-90)
-constexpr int R2_BB_TO_A_FLATS = 6;                 // B♭ clarinet: 6+ flats -> A clarinet (K&G pp. 117, 209)
-constexpr int R2_A_TO_BB = 6;                       // A clarinet: 6+ sharps or flats -> B♭ clarinet (K&G pp. 90, 117, 209)
-constexpr int R2_RESPELL_7 = 7;                     // 7 sharps / flats -> the 5-accidental key (Gould p. 252; K&G pp. 90, 117)
+constexpr int R2_BB_TO_A_FLATS = 6;                 // B♭ clarinet: 6+ flats -> A clarinet (K&G pp. 118, 209)
+constexpr int R2_A_TO_BB = 6;                       // A clarinet: 6+ sharps or flats -> B♭ clarinet (K&G p. 90)
+constexpr int R2_RESPELL_7 = 7;                     // 7 sharps / flats -> the 5-accidental key (Gould p. 252; K&G p. 90)
 constexpr int R2_RESPELL_6 = 6;                     // 6 on the wrong side for the instrument's key (Gould p. 252)
 
 // R3 string indications (Gould p. 394; Adler p. 54): "sul" + a note letter, or a roman numeral I-IV
@@ -629,7 +629,7 @@ constexpr const char* C1_MULTI_CLEF_IDS =
 constexpr const char* C1_OUTER_CLEF_IDS =
       "^(pluck\\.harp|keyboard\\.(piano(\\..*)?|celesta|harpsichord|organ(\\..*)?|clavichord)|pitched-percussion\\.marimba(\\.bass)?)$";
 constexpr int C1_CLEF_LEDGER_MIN = 3;               // a note needing 3 or more ledger lines (Sevsay p. 6; Adler p. 84)
-constexpr int C1_CLEF_RUN_MIN = 3;                  // 3 such notes in a row; 1 or 2 are not marked (Sevsay p. 6)
+constexpr int C1_CLEF_RUN_MIN = 3;                  // 3 such notes in a row; 1 or 2 are not marked (Sevsay p. 6: individual notes; the count of 3 is ours)
 // C1-HORN-BASS: a horn note in bass clef written above G3 (Blatter p. 152)
 constexpr int C1_HORN_BASS_MAX = 55;                // written MIDI pitch, G3; higher is marked
 

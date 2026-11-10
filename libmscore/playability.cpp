@@ -1471,9 +1471,9 @@ void Pass::checkTechniqueCancels(Part* part, const QString& staffName)
             { STRINGS, "special pizzicato", "arco / ord.", "Kennan & Grantham p. 66", special },
             { STRINGS, "col legno", "ord. / naturale / normale", "Adler p. 33; Sevsay p. 41; Blatter pp. 37-38",
               wordState(N1_COL_LEGNO_ON, ord) },
-            { STRINGS, "sul ponticello", "ord. / naturale / normale", "Adler p. 33; Sevsay p. 41; Blatter pp. 37-38",
+            { STRINGS, "sul ponticello", "ord. / naturale / normale", "Adler p. 33; Blatter pp. 37-38",
               wordState(N1_PONT_ON, ord) },
-            { STRINGS, "sul tasto", "ord. / naturale / normale", "Adler p. 33; Sevsay p. 41; Blatter pp. 37-38",
+            { STRINGS, "sul tasto", "ord. / naturale / normale", "Adler p. 33; Blatter pp. 37-38",
               wordState(N1_TASTO_ON, ord) },
             { HORN, "stopped", "open / offen / aperto", "Adler p. 323", hornStopState },
             };
@@ -1947,10 +1947,10 @@ void Pass::checkMalletChords(Part* part, const QString& staffName)
 //    each key signature on the staff (not the ones layout repeats), as the part shows it: written
 //    (with concert pitch on, the concert key transposed back as MuseScore does), on an instrument
 //    whose transposition changes the key. R2-RESPELL-7: 7 sharps or flats, the 5-accidental key
-//    (Gould p. 252; Kennan & Grantham pp. 90, 117). R2-BB-TO-A / R2-A-TO-BB (not on a key marked by
+//    (Gould p. 252; Kennan & Grantham p. 90). R2-BB-TO-A / R2-A-TO-BB (not on a key marked by
 //    R2-RESPELL-7): a B♭ clarinet (B♭ soprano clarinet ids, transposition a major 2nd down) with 5+
 //    sharps or 6+ flats, an A clarinet (minor 3rd down) with 6+ of either (Kennan & Grantham pp. 89-90,
-//    117, 209). R2-RESPELL-6: instruments in A, D, G with 6 flats, in B♭, F, E♭ with 6 sharps (Gould
+//    118, 209; the A to B♭ switch p. 90). R2-RESPELL-6: instruments in A, D, G with 6 flats, in B♭, F, E♭ with 6 sharps (Gould
 //    p. 252). Marked on the first chord after the key signature.
 //---------------------------------------------------------
 
@@ -2000,18 +2000,18 @@ void Pass::checkClarinetKey(Part* part, const QString& staffName)
                   if (std::abs(fifths) >= R2_RESPELL_7) {
                         const int other = fifths > 0 ? fifths - 12 : fifths + 12;
                         chordRow(s, st, staffName, "clarinetKey",
-                                 QString("written in %1: write it as %2 (%3) (solo and section) (Gould p. 252; Kennan & Grantham pp. 90, 117)")
+                                 QString("written in %1: write it as %2 (%3) (solo and section) (Gould p. 252; Kennan & Grantham p. 90)")
                                  .arg(written, keyName(other), accidentalCount(other)), accidentalCount(fifths));
                         }
                   else {
                         if (bb && (fifths >= R2_BB_TO_A_SHARPS || -fifths >= R2_BB_TO_A_FLATS))
                               chordRow(s, st, staffName, "clarinetKey",
                                        QString::fromUtf8("B♭ clarinet written in %1: the A clarinet is the better choice (solo and section) "
-                                                         "(Kennan & Grantham pp. 89-90, 117, 209)").arg(written), accidentalCount(fifths));
+                                                         "(Kennan & Grantham pp. 89-90, 118, 209)").arg(written), accidentalCount(fifths));
                         if (a && std::abs(fifths) >= R2_A_TO_BB)
                               chordRow(s, st, staffName, "clarinetKey",
                                        QString::fromUtf8("A clarinet written in %1: the B♭ clarinet is the better choice (solo and section) "
-                                                         "(Kennan & Grantham pp. 90, 117, 209)").arg(written), accidentalCount(fifths));
+                                                         "(Kennan & Grantham p. 90)").arg(written), accidentalCount(fifths));
                         }
                   // instruments in sharp keys (A 9, D 2, G 7) read sharps, in flat keys (B♭ 10, F 5, E♭ 3) flats
                   const bool sharpKey = inKey == 9 || inKey == 2 || inKey == 7;
@@ -3395,8 +3395,8 @@ static QString handName(int hand)
 //---------------------------------------------------------
 //   checkHarp
 //    H1: one pedal per letter, every octave (Adler p. 90); its setting before the letter's first
-//    note is the key signature's there (K&G p. 277); a note needing another setting is a pedal
-//    change just before it (Adler p. 92), any time is enough (K&G p. 276). Red: double sharps
+//    note is the key signature's there (K&G p. 278); a note needing another setting is a pedal
+//    change just before it (Adler p. 92), any time is enough (K&G p. 277). Red: double sharps
 //    and flats, notes without a string, two spellings of a letter sounding together (Adler
 //    p. 90). Warning: two changes at once on one foot (Adler p. 91, Blatter p. 256), and a new
 //    setting for C1 or D1, which are retuned by hand (Adler p. 90). Changes for the part's first

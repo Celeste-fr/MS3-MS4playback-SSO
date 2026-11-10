@@ -1824,7 +1824,7 @@ void TestPlayability::techniqueCancels()
       QVERIFY(score);
       PlayabilityResult r = Playability::analyse(score);
       const QString vib = "Adler p. 171; Kennan & Grantham p. 66; Sevsay pp. 32, 122; Blatter p. 40";
-      const QString legno = "Adler p. 33; Sevsay p. 41; Blatter pp. 37-38";
+      const QString legno = "Adler p. 33; Blatter pp. 37-38";
       const QString brass = "Adler pp. 322, 333-334; Kennan & Grantham p. 133; Blatter p. 143";
       QStringList got = htkRows(r, { "technique" });
       QStringList want = {
@@ -1977,14 +1977,14 @@ void TestPlayability::clarinetKey()
       QVERIFY(score);
       PlayabilityResult r = Playability::analyse(score);
       QStringList got = htkRows(r, { "clarinetKey" });
-      const QString toA = QString::fromUtf8(": the A clarinet is the better choice (solo and section) (Kennan & Grantham pp. 89-90, 117, 209)");
+      const QString toA = QString::fromUtf8(": the A clarinet is the better choice (solo and section) (Kennan & Grantham pp. 89-90, 118, 209)");
       QStringList want = {
             rowText(2, "Clarinet in Bb", "notation", QString::fromUtf8("B♭ clarinet written in B major (5 sharps)") + toA, "5 sharps"),
             rowText(3, "Clarinet in Bb", "notation", QString::fromUtf8("written in C♯ major (7 sharps): write it as D♭ major (5 flats) "
-                    "(solo and section) (Gould p. 252; Kennan & Grantham pp. 90, 117)"), "7 sharps"),       // not also "A clarinet"
+                    "(solo and section) (Gould p. 252; Kennan & Grantham p. 90)"), "7 sharps"),       // not also "A clarinet"
             rowText(4, "Clarinet in Bb", "notation", QString::fromUtf8("B♭ clarinet written in G♭ major (6 flats)") + toA, "6 flats"),
             rowText(2, "Clarinet in A", "notation", QString::fromUtf8("A clarinet written in F♯ major (6 sharps): the B♭ clarinet is the "
-                    "better choice (solo and section) (Kennan & Grantham pp. 90, 117, 209)"), "6 sharps"),
+                    "better choice (solo and section) (Kennan & Grantham p. 90)"), "6 sharps"),
             rowText(1, "Horn in F", "notation", QString::fromUtf8("instrument in F written in F♯ major (6 sharps): an instrument in a flat "
                     "key reads G♭ major (6 flats) (solo and section) (Gould p. 252)"), "6 sharps") };
       want.sort();
