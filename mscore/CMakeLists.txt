@@ -322,6 +322,7 @@ add_library(mscoreapp STATIC
       lagprobesession.cpp lagprobesession.h
       renderahead.cpp renderahead.h playcapture.cpp playcapture.h
       editwarmup.cpp editwarmup.h
+      scriptconsole.cpp scriptconsole.h
 
       ${CLOUD_SRC}
       ${IMPORTMIDIUI_SRC}

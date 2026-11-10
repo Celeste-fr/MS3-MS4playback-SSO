@@ -191,6 +191,8 @@
 #include "plugin/qmlplugin.h"
 #ifdef SCRIPT_INTERFACE
 #include "plugin/pluginCreator.h"
+#include "scriptconsole.h"
+#include "libmscore/script/scriptengine.h"
 #include "plugin/pluginManager.h"
 #include "plugin/qmlpluginengine.h"
 #endif
@@ -325,6 +327,8 @@ Q_GLOBAL_STATIC(QString, highlightConfigPath);
 QString mscoreGlobalShare;
 
 Q_GLOBAL_STATIC(QString, outFileName);
+static bool luaMode = false;               // --lua <script>: run a Lua score script on the score given (runLuaScript)
+Q_GLOBAL_STATIC(QString, luaScriptFile);
 Q_GLOBAL_STATIC( QString, jsonFileName);
 Q_GLOBAL_STATIC( QString, audioDriver);
 Q_GLOBAL_STATIC(QString, pluginName);
@@ -2162,6 +2166,10 @@ MuseScore::MuseScore()
       a->setCheckable(true);
       menuView->addAction(a);
 
+      a = getAction("toggle-script-console");
+      a->setCheckable(true);
+      menuView->addAction(a);
+
       a = getAction("toggle-mixer");
       a->setCheckable(true);
       menuView->addAction(a);
@@ -3436,6 +3444,8 @@ void MuseScore::setCurrentView(int tabIdx, int idx)
 void MuseScore::setCurrentScoreView(ScoreView* view)
       {
       cv = view;
+      if (_scriptConsole)
+            _scriptConsole->scoreChanged();
       if (cv) {
             ctab = (tab2 && tab2->view() == view) ? tab2 : tab1;
             if (timeline())
@@ -4569,6 +4579,43 @@ static bool convert(const QString& inFile, const QString& outFile)
       }
 
 //---------------------------------------------------------
+//   runLuaScript
+//    mscore --lua script.lua score.mscz [-o out]: the score script (libmscore/script/scriptengine.h) on the
+//    score, what it prints on stdout; with -o the result is saved (any format -o knows); without it nothing is
+//    written (a script that only counts). A script's error: its message on stderr, nothing saved, exit code 1.
+//---------------------------------------------------------
+
+static bool runLuaScript(const QStringList& argv)
+      {
+      if (argv.isEmpty()) {
+            fprintf(stderr, "--lua: no score given\n");
+            return false;
+            }
+      QFile f(*luaScriptFile);
+      if (!f.open(QIODevice::ReadOnly)) {
+            fprintf(stderr, "--lua: cannot read <%s>\n", qPrintable(*luaScriptFile));
+            return false;
+            }
+      const QString code = QString::fromUtf8(f.readAll());
+      Score* score = mscore->openScore(argv[0], false, false);
+      if (!score)
+            return false;
+      mscore->setCurrentScore(score);
+      ScriptEngine engine;
+      QTextStream out(stdout);
+      engine.onLog = [&out](const ScriptLog& l) { out << l.text << '\n'; out.flush(); };
+      const ScriptResult r = engine.runOnScore(score, code);
+      bool ok = r.ok();
+      if (!ok)
+            fprintf(stderr, "%s: %s\n", qPrintable(QFileInfo(*luaScriptFile).fileName()), qPrintable(r.error));
+      else if (!outFileName->isEmpty())
+            ok = doConvert(score, QJsonArray { *outFileName }, QString());
+      delete score;
+      mscore->setCurrentScore(nullptr);
+      return ok;
+      }
+
+//---------------------------------------------------------
 //   doProcessJob
 //---------------------------------------------------------
 
@@ -5452,6 +5499,8 @@ static bool processNonGui(const QStringList& argv)
             return verifyInBackground(argv);
       if (evenLevelsMode)
             return evenLevelsInBackground(argv);
+      if (luaMode)
+            return runLuaScript(argv);
       if (extractMode)
             return extractInBackground(argv);
       if (cliSaveOnline)
@@ -6314,6 +6363,8 @@ void MuseScore::writeSettings()
 #ifdef SCRIPT_INTERFACE
       if (_pluginCreator)
             _pluginCreator->writeSettings();
+      if (_scriptConsole)
+            _scriptConsole->writeSettings();
 #endif
       if (synthControl)
             synthControl->writeSettings();
@@ -7238,6 +7289,35 @@ void MuseScore::showPianoKeyboard(bool visible)
       }
 
 //---------------------------------------------------------
+//   showScriptConsole
+//    View › Script Console (Ctrl+Shift+P): the Lua console, a dock at the bottom in tabs with the Timeline
+//    (scriptconsole.h); made when first shown
+//---------------------------------------------------------
+
+void MuseScore::showScriptConsole(bool visible)
+      {
+      QAction* a = getAction("toggle-script-console");
+      if (!_scriptConsole) {
+            if (!visible)
+                  return;
+            _scriptConsole = new ScriptConsole(this);
+            connect(_scriptConsole, SIGNAL(closed(bool)), a, SLOT(setChecked(bool)));
+            addDockWidget(Qt::BottomDockWidgetArea, _scriptConsole);
+            if (_timeline && dockWidgetArea(_timeline) == Qt::BottomDockWidgetArea && !_timeline->isFloating())
+                  tabifyDockWidget(_timeline, _scriptConsole);
+            }
+      reDisplayDockWidget(_scriptConsole, visible);
+      a->setChecked(visible);
+      if (visible) {
+            _scriptConsole->raise();
+            // (after the dock is laid out and shown: before, the score view keeps the keyboard)
+            QTimer::singleShot(0, _scriptConsole, [this]() { _scriptConsole->focusInput(); });
+            }
+      else if (cv)
+            cv->setFocus();
+      }
+
+//---------------------------------------------------------
 //   showPluginCreator
 //---------------------------------------------------------
 
@@ -7815,6 +7895,8 @@ void MuseScore::endCmd(bool undoRedo)
                   SoundLibraryHost::instance()->scoreEdited(cs);  // (new patches it needs: loaded in the background)
                   EditWarmup::instance()->edited(cs);          // (its renders for the next sound, between events: editwarmup.h)
             }
+            if (_scriptConsole)
+                  _scriptConsole->scoreChanged();              // (its live preview follows the edit)
             setPos(cs->inputState().tick());
             updateInputState(cs);
             updateUndoRedo();
@@ -8133,6 +8215,8 @@ void MuseScore::cmd(QAction* a, const QString& cmd)
                   showNavigator(a->isChecked());
             else if (cmd == "toggle-timeline")
                   showTimeline(a->isChecked());
+            else if (cmd == "toggle-script-console")
+                  showScriptConsole(a->isChecked());
             else if (cmd == "toggle-midiimportpanel")
                   importmidiPanel->setVisible(a->isChecked());
             else if (cmd == "toggle-mixer")
@@ -9543,6 +9627,8 @@ MuseScoreApplication::CommandLineParseResult MuseScoreApplication::parseCommandL
       parser.addOption(QCommandLineOption("verify-wav", "Use with --verify-playback: also keep the full renders"));
       parser.addOption(QCommandLineOption("verify-shareable", "Use with --verify-playback: only report.json and summary.txt, no "
                                           "audio clips and no lists of every note (a report on your own scores to post)"));
+      parser.addOption(QCommandLineOption("lua", "Run a Lua score script on the score given and print its output; "
+                                          "with -o save the changed score (scriptengine.h)", "script"));
       parser.addOption(QCommandLineOption("even-levels", "Measure the score's slurred passages on Performance legato patches with "
                                           "the sound library's plug-in and fit each note's even-levels correction (evenlevelsjob.h), "
                                           "without a window: result.json and the score with them in Documents/MuseScore Sound "
@@ -9626,6 +9712,13 @@ MuseScoreApplication::CommandLineParseResult MuseScoreApplication::parseCommandL
                   fprintf(stderr, "json file name missing\n");
                   parser.showHelp(EXIT_FAILURE);
                   }
+            }
+      if ((luaMode = parser.isSet("lua"))) {
+            *luaScriptFile = parser.value("lua");
+            MScore::noGui = true;
+            converterMode = true;
+            if (luaScriptFile->isEmpty())
+                  parser.showHelp(EXIT_FAILURE);
             }
       if ((pluginMode = parser.isSet("p"))) {
             MScore::noGui = true;

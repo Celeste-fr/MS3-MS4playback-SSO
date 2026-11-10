@@ -2327,6 +2327,17 @@ Shortcut Shortcut::_sc[] = {
          },
       {
          MsWidget::MAIN_WINDOW,
+         // (not STATE_EDIT: Ctrl+Shift+P types a p while a dynamic is edited)
+         STATE_NORMAL | STATE_NOTE_ENTRY | STATE_PLAY | STATE_FOTO,
+         "toggle-script-console",
+         QT_TRANSLATE_NOOP("action","Script Console"),
+         QT_TRANSLATE_NOOP("action","Toggle 'Script Console'"),
+         0,
+         Icons::Invalid_ICON,
+         Qt::ApplicationShortcut
+         },
+      {
+         MsWidget::MAIN_WINDOW,
          STATE_NORMAL | STATE_NOTE_ENTRY | STATE_EDIT | STATE_PLAY,
          "toggle-midiimportpanel",
          QT_TRANSLATE_NOOP("action","MIDI Import Panel"),
@@ -5010,6 +5021,15 @@ void Shortcut::load()
                   }
             else
                   e.unknown();
+            }
+      // Ctrl+Shift+P went from Plugin Creator to the script console (2026-11): a user's file from before (it has
+      // no entry for the console) that still has exactly the old default on Plugin Creator gives the key up, so
+      // that the console takes it below; any other binding of the user's stays as it is
+      if (f.fileName() != defaultFileName && !inFile.contains("toggle-script-console")) {
+            Shortcut* pc = getShortcut("plugin-creator");
+            if (pc && pc->_keys.size() == 1 && pc->_keys[0] == QKeySequence(Qt::CTRL + Qt::SHIFT + Qt::Key_P)
+               && pc->_standardKey == QKeySequence::UnknownKey)
+                  pc->_keys.clear();
             }
       // the user's own file, saved before an action was added (numpad scale degrees): the new action takes its
       // default keys, each one the user hasn't bound to something else (a key another action has by default too,

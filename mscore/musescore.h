@@ -89,6 +89,7 @@ class PlayabilityPanel;
 class OmrPanel;
 class NScrollArea;
 class TDockWidget;
+class ScriptConsole;
 class Sym;
 class MasterPalette;
 class PluginCreator;
@@ -235,6 +236,7 @@ class MuseScore : public QMainWindow, public MuseScoreCore {
       ScoreTab* tab2;
       NScrollArea* _navigator;
       TDockWidget* _timeline;
+      ScriptConsole* _scriptConsole { nullptr };   // made when first shown (scriptconsole.h)
       ImportMidiPanel* importmidiPanel     { 0 };
       QFrame* importmidiShowPanel;
       QSplitter* mainWindow;
@@ -476,6 +478,7 @@ class MuseScore : public QMainWindow, public MuseScoreCore {
       void showOmrPanel(bool);
       void showNavigator(bool);
       void showTimeline(bool);
+      void showScriptConsole(bool);
       void showSelectionWindow(bool);
       void showSearchDialog();
       void showToolbarEditor();
