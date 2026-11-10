@@ -132,6 +132,29 @@ in an old shortcuts.xml). Continuous View has a bar ruler (`mscore/barruler.*`: 
 as the measure-number style counts, view only, View › Bar Ruler). Switching the view mode keeps the selection's measure (if in view) or the one at the view's centre centred
 horizontally, its staff at the same height (`ScoreView::viewAnchor` / `showViewAnchor`, from `MuseScore::switchLayoutMode`).
 
+**Score scripts in Lua** (branch `lua-console`, 2026-11-09; HANDOFF.md › Lua console; not merged, the window untried): a
+script queries the notes of a score and adds marks, `findall(strings, 1 <= measure <= 16, slur, slur.index == 1).add(marcato)`
+(also `first` / `last` / `next(m, …)` / `count`). The language is **`libmscore/script/scorescript.lua`** (its header is the
+design): one Lua library for MuseScore, the browser playground and a plain `lua`, Lua 5.3 syntax; a source rewrite makes each
+condition argument `function(_ENV) return … end` (chained comparisons, `beat ==` / `duration ==` with a tolerance, `dynamic`
+as ordered values, `part == "name"`, `slur.x` safe on unslurred notes), conditions are true / false (a mark = `has(mark)`),
+declarations hiding a note property / section / mark are errors, the five query names reserved; the unit is the note (a tied
+note one note, grace notes only with `grace`), marks per chord and idempotent; a whitelist sandbox, an instruction limit no
+`pcall` swallows, a preview on shadow marks; selections stale after the notes change. **`libmscore/script/scriptengine.*`**
+(`ScriptEngine`: the host, in libmscore so that mtests and the command line need no GUI): `snapshot(score)` walks the master
+score into plain data (parts with instrument id / family / group: sections never come from part names; `measure` the printed
+number, `index` counted, `beat` in the time signature's beats, written `pitch` / `name`, `sounding`, `degree` by the key
+signature's mode, `dynamic` in force or none), `runOnScore` = snapshot + run + the edits as ONE undo step (rolled back when
+the script fails), only visible marks (articulations, fermatas, staff text); memory cap by the state's allocator; the library
+embedded as bytes (`embed_lua.cmake` → `scorescript_lua.h`). Lua 5.4.9 is vendored in `thirdparty/lua` (MIT, static C library,
+`lua_standalone` for the tests). **`mscore/scriptconsole.*`**: View › Script Console (**Ctrl+Shift+P**, moved from Plugin
+Creator, which keeps its menu item; `Shortcut::load` hands the key over only in a user's file that still had the old default),
+a bottom dock in tabs with the Timeline: Console (REPL, variables persist) and Scripts (editor + saved `.lua` files in
+`<dataPath>/scripts`), a colour per kind of word, completion by context, error underline, hover help, live preview
+(`ScoreView::setScriptPreview`, the Scripts tab's on a worker thread). Headless: `mscore --lua script.lua score [-o out]`.
+Tests: `libmscore/script/test/run.lua` (no MuseScore: `lua_standalone libmscore/script/test/run.lua`), the playground's
+`test/run.js` (Fengari; `tools/scripting/update_playground.py <page>` puts the library into the page), `tst_luascripting`.
+
 **Tuning** (`libmscore/tuning.h`): temperament (metaTag `temperament`, the Tuning plugin's JSON) + accidental rules
 (microtonal, HEJI, Johnston, stacked accidentals as hidden `Symbol`s) + the note's own tuning. `tuningtables.h`
 from `tools/tuning/gen_tuning_tables.py`; `mscore/tuningdialog.*`; plugin API `playbackTuning`,
@@ -813,6 +836,7 @@ ninja -j4 mscore                    # about 40 minutes on 4 cores
   `tools/live/test` and the Python tests in `tools/soundlibraries` pass. `tools/playbackverify/test_heard_check.py`: 23 run, 1
   skipped (`KeptRun` without `HC_CONTROL_DUMP` / `HC_CONTROL_WAVS`; 2026-11-01, `KnownAnswer`: the heard check's positive
   controls, `heard_control.py`; VERIFY.md › Positive controls).
+- `tst_luascripting` (mtest/libmscore/scripting; `tst_scripting` is the QML plug-in test): 13 passed with init and cleanup (2026-11-10, lua-console); the library alone: `lua_standalone libmscore/script/test/run.lua`, 138 checks (target `lua_standalone`, no Qt).
 - `tst_midi`: 97 passed (2026-10-04). Its 3.x tests render with MuseScore 3.6's method (`ms3State`: the MS3 mode)
   against 3.6's references, changed only where the fork differs on purpose (bends for a 24-semitone wheel, the
   export's RPN says 24; a fermata without a stretch stretches by 2); `eventsMs4` renders the same scores as MS4
