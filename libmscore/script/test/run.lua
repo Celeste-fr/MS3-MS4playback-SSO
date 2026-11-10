@@ -274,6 +274,9 @@ M.setScore(SMALL)
 local function got(src, opts) local res = run(src, opts); return res.error or table.concat(ids(res), " ") end
 check("a tied note is one note with its whole length", got("findall(tied)") == "2" and got("findall(violin, duration == 3)") == "2", got("findall(tied)"))
 check("grace notes are left out", got("findall(violin1)") == "1 2 4 5", got("findall(violin1)"))
+do local c = M.complete("findall(vio"); local seen = {}
+  for _, it in ipairs(c.items) do seen[it.word] = true end
+  check("completion: violin1 not offered for a section of one part (still accepted when typed)", seen.violin and seen.violins and not seen.violin1 and got("findall(violin1)") == "1 2 4 5", tostring(seen.violin1)) end
 check("… unless the query says grace", got("findall(violin1, grace)") == "3" and got("findall(violin1, grace or beat == 1)") == "2 3", got("findall(violin1, grace or beat == 1)"))
 check("not grace is the same as no word about it", got("findall(violin1, not grace)") == "1 2 4 5", got("findall(violin1, not grace)"))
 check("measure is the printed number (pickup 0), index counts", got("findall(measure == 0)") == "1" and got("findall(index == 1)") == "1" and got("findall(violin, index == 2)") == "2 4 5", got("findall(index == 1)"))
@@ -281,7 +284,7 @@ check("beat == 4 + 1/3 matches a triplet (tolerance)", got("findall(beat == 13/3
 check("duration == quarter/3", got("findall(duration == quarter/3)") == "4 5", got("findall(duration == quarter/3)"))
 check("voice and staff", got("findall(keyboards, staff == 2, voice == 2)") == "8" and got("findall(staff == 2)") == "7 8", got("findall(staff == 2)"))
 check("written pitch, and sounding", got("findall(pitch == 60)") == "8 9" and got("findall(sounding == 60)") == "6 8" and got("findall(sounding == 53)") == "9", got("findall(sounding == 60)"))
-check("sections from instrument ids: strings, winds, woodwinds, brass, clarinets, horns", got("findall(strings)") == "1 2 4 5" and got("findall(winds)") == "6 9"
+check("sections from instrument ids: strings, winds, woodwinds, brass, clarinets, horns", got("findall(strings)") == "1 2 4 5" and got("findall(winds)") == "6"
   and got("findall(woodwinds)") == "6" and got("findall(brass)") == "9" and got("findall(clarinets)") == "6" and got("findall(horns)") == "9" and got("findall(clarinet)") == "6", got("findall(winds)"))
 check('part("Βιολί"): a part by its exact name, not ASCII', got('findall(part("Βιολί"))') == "1 2 4 5" and got('findall(part == "Βιολί")') == "1 2 4 5" and got('findall(part ~= "Βιολί", part("Piano", "Horn"))') == "7 8 9", got('findall(part("Βιολί"))'))
 check("partname is the name as text", got('findall(partname == "Clarinet in B♭")') == "6", got('findall(partname == "Clarinet in B♭")'))
@@ -312,6 +315,10 @@ check("check: a plain syntax error", msg and msg:find("^line 1: ") and line == 1
 local function words(c) local t = {} for _, it in ipairs(c.items) do t[#t + 1] = it.word end return t end
 local function hasWord(c, w) for _, it in ipairs(c.items) do if it.word == w then return it end end return nil end
 local c = M.complete("findall(vio")
+do local miss = {}
+  for w in pairs(M.words()) do local h = M.help(w); if not h or h == "" then miss[#miss + 1] = w end end
+  table.sort(miss)
+  check("hover help for every word of the vocabulary (keywords and Lua functions too)", #miss == 0, table.concat(miss, " ")) end
 check("complete in a query: this score's sections, with their kind", hasWord(c, "violin1") and hasWord(c, "violins") and hasWord(c, "violin1").kind == "part" and c.from == 9, table.concat(words(c), " "))
 c = M.complete("findall(violin1, slur.")
 check("complete after slur.: its fields", #c.items == 4 and hasWord(c, "index"), table.concat(words(c), " "))

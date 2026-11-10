@@ -17,6 +17,7 @@
 #include <QAbstractItemView>
 #include <QCompleter>
 #include <QDir>
+#include <QFileInfo>
 #include <QFile>
 #include <QFontDatabase>
 #include <QHBoxLayout>
@@ -35,12 +36,15 @@
 #include <QStandardItemModel>
 #include <QTabWidget>
 #include <QTextBlock>
+#include <QStyle>
+#include <QStyleOptionViewItem>
 #include <QToolButton>
 #include <QToolTip>
 #include <QTreeView>
 #include <QVBoxLayout>
 
 #include "musescore.h"
+#include "preferences.h"
 #include "scoreview.h"
 #include "libmscore/score.h"
 #include "libmscore/note.h"
@@ -231,6 +235,23 @@ void ScriptHighlighter::highlightBlock(const QString& text)
       }
 
 //---------------------------------------------------------
+//   CompletionDelegate
+//---------------------------------------------------------
+
+void CompletionDelegate::initStyleOption(QStyleOptionViewItem* option, const QModelIndex& index) const
+      {
+      QStyledItemDelegate::initStyleOption(option, index);
+      if (option->state & QStyle::State_Selected) {
+            const QBrush text = option->palette.brush(QPalette::Active, QPalette::HighlightedText);
+            option->palette.setBrush(QPalette::Text, text);
+            option->palette.setBrush(QPalette::HighlightedText, text);
+            option->palette.setBrush(QPalette::WindowText, text);
+            if (index.column() == 1)
+                  option->font.setItalic(true);
+            }
+      }
+
+//---------------------------------------------------------
 //   ScriptEdit
 //---------------------------------------------------------
 
@@ -260,6 +281,7 @@ ScriptEdit::ScriptEdit(ScriptEngine* engine, bool singleLine, QWidget* parent)
       popup->setAllColumnsShowFocus(true);
       popup->setSelectionBehavior(QAbstractItemView::SelectRows);
       popup->setFont(f);
+      popup->setItemDelegate(new CompletionDelegate(popup));
       _completer->setPopup(popup);
       connect(_completer, QOverload<const QModelIndex&>::of(&QCompleter::activated), this, &ScriptEdit::insertCompletion);
       reloadWords();
@@ -580,7 +602,23 @@ void ScriptPreviewer::request(int serial, const ScriptSnapshot& snapshot, const 
 
 QString ScriptConsole::scriptsFolder()
       {
+      // as MuseScore's other folders (Plugins, Styles): a preference, relative paths from the home folder
+      QFileInfo f(preferences.getString(PREF_APP_PATHS_MYSCRIPTS));
+      if (f.isRelative())
+            f.setFile(QDir::home(), preferences.getString(PREF_APP_PATHS_MYSCRIPTS));
+      return f.absoluteFilePath();
+      }
+
+QString ScriptConsole::legacyScriptsFolder()
+      {
       return dataPath + "/scripts";
+      }
+
+QString ScriptConsole::scriptFile(const QString& name)
+      {
+      const QString now = scriptsFolder() + "/" + name + ".lua";
+      const QString old = legacyScriptsFolder() + "/" + name + ".lua";
+      return !QFile::exists(now) && QFile::exists(old) ? old : now;
       }
 
 ScriptConsole::ScriptConsole(QWidget* parent)
@@ -589,6 +627,10 @@ ScriptConsole::ScriptConsole(QWidget* parent)
       setObjectName("ScriptConsole");
       setWindowTitle(tr("Script Console"));
       setAllowedAreas(Qt::BottomDockWidgetArea | Qt::TopDockWidgetArea);
+      // The window title stays (the dock's tab label next to the Timeline, the View menu entry, a floating window's
+      // frame). The title bar's caption repeated it right above the Console / Scripts tabs, so the bar goes: an empty
+      // widget in its place, and the float and close buttons sit at the right end of the tab row instead.
+      setTitleBarWidget(new QWidget(this));
 
       _engine = new ScriptEngine;
       _previewer = new ScriptPreviewer(this);
@@ -597,6 +639,27 @@ ScriptConsole::ScriptConsole(QWidget* parent)
       _tabs = new QTabWidget(this);
       _tabs->setDocumentMode(true);
       setWidget(_tabs);
+      {
+      QWidget* corner = new QWidget;
+      QHBoxLayout* kl = new QHBoxLayout(corner);
+      kl->setContentsMargins(0, 0, 0, 0);
+      kl->setSpacing(0);
+      QToolButton* floatButton = new QToolButton;
+      floatButton->setAutoRaise(true);
+      floatButton->setIcon(style()->standardIcon(QStyle::SP_TitleBarNormalButton));
+      floatButton->setToolTip(tr("Float"));
+      floatButton->setAccessibleName(tr("Float"));
+      QToolButton* closeButton = new QToolButton;
+      closeButton->setAutoRaise(true);
+      closeButton->setIcon(style()->standardIcon(QStyle::SP_TitleBarCloseButton));
+      closeButton->setToolTip(tr("Close"));
+      closeButton->setAccessibleName(tr("Close"));
+      kl->addWidget(floatButton);
+      kl->addWidget(closeButton);
+      _tabs->setCornerWidget(corner, Qt::TopRightCorner);
+      connect(floatButton, &QToolButton::clicked, this, [this]() { setFloating(!isFloating()); });
+      connect(closeButton, &QToolButton::clicked, this, &QWidget::close);
+      }
 
       // --- Console
       QWidget* console = new QWidget;
@@ -770,16 +833,25 @@ void ScriptConsole::hideEvent(QHideEvent* e)
 
 void ScriptConsole::print(const QString& text, const QString& kind)
       {
-      const bool dark = _output->palette().color(QPalette::Base).lightness() < 128;
+      _log.append({ text, kind });
+      if (_log.size() > 6000)
+            _log.remove(0, _log.size() - 5000);
+      appendOutput(text, kind);
+      }
+
+void ScriptConsole::appendOutput(const QString& text, const QString& kind)
+      {
+      const QPalette pal = _output->palette();
+      const bool dark = pal.color(QPalette::Base).lightness() < 128;
       QTextCharFormat f;
       if (kind == "input")
-            f.setForeground(_output->palette().color(QPalette::Disabled, QPalette::Text));
+            f.setForeground(pal.color(QPalette::Disabled, QPalette::Text));
       else if (kind == "error")
-            f.setForeground(QColor(dark ? "#ff8a80" : "#c62828"));
+            f.setForeground(errorColor(pal));
       else if (kind == "query")
             f.setForeground(ScriptHighlighter::kindColor("query", dark));
       else
-            f.setForeground(_output->palette().color(QPalette::Text));
+            f.setForeground(pal.color(QPalette::Text));
       QTextCursor c(_output->document());
       c.movePosition(QTextCursor::End);
       if (!_output->document()->isEmpty())
@@ -789,14 +861,65 @@ void ScriptConsole::print(const QString& text, const QString& kind)
       }
 
 //---------------------------------------------------------
+//   errorColor
+//    the one colour of an error, in the output and the status lines, for the light and the dark theme
+//---------------------------------------------------------
+
+QColor ScriptConsole::errorColor(const QPalette& pal)
+      {
+      return QColor(pal.color(QPalette::Base).lightness() < 128 ? "#ff8a80" : "#c62828");
+      }
+
+void ScriptConsole::setStatus(QLabel* label, const QString& text, bool error)
+      {
+      if (label == _consoleStatus)
+            _consoleError = error;
+      else
+            _scriptError = error;
+      label->setStyleSheet(error ? QString("color: %1;").arg(errorColor(label->palette()).name()) : QString());
+      label->setText(text);
+      }
+
+//---------------------------------------------------------
+//   recolour
+//    after a theme switch the output already printed is drawn again from the log, in the new colours
+//---------------------------------------------------------
+
+void ScriptConsole::recolour()
+      {
+      const bool dark = _output->palette().color(QPalette::Base).lightness() < 128;
+      if (dark == _logDark)
+            return;
+      _logDark = dark;
+      const int scroll = _output->verticalScrollBar()->value();
+      const bool atEnd = scroll >= _output->verticalScrollBar()->maximum() - 2;
+      _output->clear();
+      for (const auto& e : _log)
+            appendOutput(e.first, e.second);
+      if (!atEnd)
+            _output->verticalScrollBar()->setValue(scroll);
+      if (_consoleError)
+            setStatus(_consoleStatus, _consoleStatus->text(), true);
+      if (_scriptError)
+            setStatus(_scriptStatus, _scriptStatus->text(), true);
+      }
+
+void ScriptConsole::changeEvent(QEvent* e)
+      {
+      QDockWidget::changeEvent(e);
+      if (e->type() == QEvent::PaletteChange || e->type() == QEvent::ApplicationPaletteChange || e->type() == QEvent::StyleChange)
+            QTimer::singleShot(0, this, &ScriptConsole::recolour);      // (once the new palette has reached the children)
+      }
+
+//---------------------------------------------------------
 //   execute
 //    one run = one undo step; its output goes to the Console tab's history
 //---------------------------------------------------------
 
-void ScriptConsole::execute(const QString& code, bool console)
+bool ScriptConsole::execute(const QString& code, bool console)
       {
       if (code.trimmed().isEmpty())
-            return;
+            return false;
       Score* s = score();
       _previewTimer.stop();
       ++_serial;                                // a preview in flight is out of date
@@ -805,8 +928,8 @@ void ScriptConsole::execute(const QString& code, bool console)
       ScriptEdit* edit = console ? _input : _editor;
       QLabel* status = console ? _consoleStatus : _scriptStatus;
       if (!s) {
-            status->setText(tr("No score is open."));
-            return;
+            setStatus(status, tr("No score is open."), true);
+            return false;
             }
       for (const QString& line : code.split('\n'))
             print((console ? "> " : "  ") + line, "input");
@@ -820,8 +943,19 @@ void ScriptConsole::execute(const QString& code, bool console)
             print(r.changes == 1 ? tr("1 change to the score") : tr("%1 changes to the score").arg(r.changes), "query");
       mscore->endCmd();                         // the window follows the edit (inspector, undo, repaint)
       showResult(r, edit, status, false);
+      if (!console) {
+            // the Scripts tab stays where it is and its status line keeps the result until the text changes
+            // (the owner, 2026-11-10: "30 changes to the score" or the error)
+            if (r.ok())
+                  setStatus(status, r.changes == 0 ? tr("No changes to the score")
+                                  : r.changes == 1 ? tr("1 change to the score") : tr("%1 changes to the score").arg(r.changes), false);
+            _scriptHold = true;
+            _scriptHoldText = code;
+            _scriptHoldFull = _editor->toPlainText();
+            }
       scoreChanged();
       edit->setFocus();                         // (the edit's update gave the keyboard to the score view)
+      return true;
       }
 
 //---------------------------------------------------------
@@ -832,13 +966,10 @@ void ScriptConsole::showResult(const ScriptResult& r, ScriptEdit* edit, QLabel* 
       {
       if (!r.ok()) {
             edit->setError(r.errorLine, r.error);
-            // (while a line is being typed, an unfinished line is no news: a quiet colour)
-            status->setStyleSheet(preview ? "color: palette(mid);" : "color: #c62828;");
-            status->setText(r.error);
+            setStatus(status, r.error, true);   // (the same error colour typing or running: the owner, 2026-11-10)
             return;
             }
       edit->setError(0, QString());
-      status->setStyleSheet(QString());
       QStringList parts;
       // (no %n: the plural forms would need a translation file even in English)
       const int notes = r.matched.size();
@@ -850,7 +981,7 @@ void ScriptConsole::showResult(const ScriptResult& r, ScriptEdit* edit, QLabel* 
             else
                   parts << (r.changes == 1 ? tr("1 change") : tr("%1 changes").arg(r.changes));
             }
-      status->setText(parts.join(", "));
+      setStatus(status, parts.join(", "), false);
       }
 
 void ScriptConsole::runConsoleLine(const QString& line)
@@ -861,8 +992,8 @@ void ScriptConsole::runConsoleLine(const QString& line)
             _history.append(line);
       _historyPos = -1;
       _historyDraft.clear();
-      execute(line, true);
-      if (_consoleStatus->styleSheet().isEmpty())     // it ran: the line is done
+      // a line that ran, failed or not, is done: the input clears and Up brings it back from the history
+      if (execute(line, true))
             _input->clear();
       }
 
@@ -943,13 +1074,16 @@ void ScriptConsole::preview()
       QLabel* status = activeStatus();
       const QString code = edit->toPlainText();
       Score* s = score();
+      if (edit == _editor && _scriptHold && code == _scriptHoldFull)      // the run's result stays: nothing changed in the text
+            return;
+      if (edit == _editor)
+            _scriptHold = false;
       ++_serial;
       if (!s || code.trimmed().isEmpty()) {
             _previewer->cancel();
             markNotes({});
             edit->setError(0, QString());
-            status->setStyleSheet(QString());
-            status->setText(QString());
+            setStatus(status, QString(), false);
             return;
             }
       _previewSnapshot = ScriptEngine::snapshot(s);
@@ -1013,9 +1147,13 @@ void ScriptConsole::refreshList(const QString& select)
       {
       _loading = true;
       _list->clear();
-      QDir dir(scriptsFolder());
-      for (const QString& f : dir.entryList({ "*.lua" }, QDir::Files, QDir::Name | QDir::IgnoreCase))
-            _list->addItem(f.left(f.size() - 4));
+            QStringList names;
+      for (const QString& folder : { scriptsFolder(), legacyScriptsFolder() })        // (the first build's folder too, read only)
+            for (const QString& f : QDir(folder).entryList({ "*.lua" }, QDir::Files, QDir::Name | QDir::IgnoreCase))
+                  if (!names.contains(f.left(f.size() - 4), Qt::CaseSensitive))
+                        names << f.left(f.size() - 4);
+      names.sort(Qt::CaseInsensitive);
+      _list->addItems(names);
       _loading = false;
       const QList<QListWidgetItem*> found = select.isEmpty() ? QList<QListWidgetItem*>() : _list->findItems(select, Qt::MatchExactly);
       if (!found.isEmpty())
@@ -1029,7 +1167,7 @@ bool ScriptConsole::saveCurrent()
       QDir().mkpath(scriptsFolder());
       QFile f(scriptsFolder() + "/" + _currentScript + ".lua");
       if (!f.open(QIODevice::WriteOnly)) {
-            _scriptStatus->setText(tr("Cannot write %1").arg(f.fileName()));
+            setStatus(_scriptStatus, tr("Cannot write %1").arg(f.fileName()), true);
             return false;
             }
       f.write(_editor->toPlainText().toUtf8());
@@ -1039,7 +1177,7 @@ bool ScriptConsole::saveCurrent()
 
 void ScriptConsole::loadScript(const QString& name)
       {
-      QFile f(scriptsFolder() + "/" + name + ".lua");
+      QFile f(scriptFile(name));
       if (!f.open(QIODevice::ReadOnly))
             return;
       _loading = true;
@@ -1067,7 +1205,7 @@ void ScriptConsole::newScript()
       name.remove(QRegularExpression("[\\\\/:*?\"<>|]"));
       if (name.isEmpty())
             return;
-      if (QFile::exists(scriptsFolder() + "/" + name + ".lua")) {
+      if (QFile::exists(scriptFile(name))) {
             QMessageBox::warning(this, tr("New Script"), tr("A script named \"%1\" already exists.").arg(name));
             return;
             }
@@ -1096,7 +1234,7 @@ void ScriptConsole::deleteScript()
       if (QMessageBox::question(this, tr("Delete Script"), tr("Delete the script \"%1\"?").arg(name),
                                 QMessageBox::Yes | QMessageBox::No, QMessageBox::No) != QMessageBox::Yes)
             return;
-      QFile::remove(scriptsFolder() + "/" + name + ".lua");
+      QFile::remove(scriptsFolder() + "/" + name + ".lua");      // (a script only in the first build's folder is left there: nothing of the user's is deleted outside the Scripts folder)
       if (name == _currentScript) {
             _currentScript.clear();
             _loading = true;

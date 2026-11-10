@@ -12,6 +12,7 @@
 #define __SCRIPTCONSOLE_H__
 
 #include <QDockWidget>
+#include <QStyledItemDelegate>
 #include <QPlainTextEdit>
 #include <QSyntaxHighlighter>
 #include <QThread>
@@ -42,7 +43,7 @@ class Score;
 //              undo step per line), variables stay from line to line (ScriptEngine::Persist), a line that is an
 //              expression prints its value (Echo). Up / Down walk the history (kept between sessions).
 //    Scripts   a multi-line editor and the saved scripts: plain .lua files, one per script, in
-//              <data folder>/scripts (ScriptConsole::scriptsFolder), named as in the list. Ctrl+Enter runs the
+//              the Scripts folder (Preferences › General, PREF_APP_PATHS_MYSCRIPTS, ScriptConsole::scriptsFolder), named as in the list. Ctrl+Enter runs the
 //              line under the cursor (or the selected text), Ctrl+Shift+Enter the whole script; each run is one
 //              undo step and starts with fresh variables. Ctrl+F finds. A changed script is saved when another
 //              one is opened, when it runs and when MuseScore closes.
@@ -92,6 +93,19 @@ class ScriptHighlighter : public QSyntaxHighlighter {
       void setWords(const QVector<QPair<QString, QString>>& words, bool dark);
       static QColor kindColor(const QString& kind, bool dark);
       static QString kindName(const QString& kind);   // as the completion list shows it
+      };
+
+//---------------------------------------------------------
+//   CompletionDelegate
+//    the popup's rows are coloured by kind; the selected row takes the palette's highlighted text colour
+//    (a kind colour on the selection colour was hard to read), the kind column in italics so that it still shows
+//---------------------------------------------------------
+
+class CompletionDelegate : public QStyledItemDelegate {
+   protected:
+      void initStyleOption(QStyleOptionViewItem*, const QModelIndex&) const override;
+   public:
+      CompletionDelegate(QObject* parent = nullptr) : QStyledItemDelegate(parent) {}
       };
 
 //---------------------------------------------------------
@@ -187,6 +201,13 @@ class ScriptConsole : public QDockWidget {
       QPlainTextEdit* _output;
       ScriptEdit* _input;
       QLabel* _consoleStatus;
+      QVector<QPair<QString, QString>> _log;    // the output as printed: text, kind (re-coloured when the theme changes)
+      bool _logDark { false };
+      bool _consoleError { false };
+      bool _scriptError { false };
+      bool _scriptHold { false };               // the Scripts status line shows a run's result
+      QString _scriptHoldText;                  // what ran
+      QString _scriptHoldFull;                  // the editor's text then
       QStringList _history;
       int _historyPos { -1 };
       QString _historyDraft;
@@ -208,7 +229,11 @@ class ScriptConsole : public QDockWidget {
       ScriptEdit* activeEdit() const;
       QLabel* activeStatus() const;
       void print(const QString& text, const QString& kind);
-      void execute(const QString& code, bool console);
+      void appendOutput(const QString& text, const QString& kind);
+      void recolour();
+      void setStatus(QLabel*, const QString& text, bool error);
+      static QColor errorColor(const QPalette&);
+      bool execute(const QString& code, bool console);       // false: nothing ran (no score)
       void showResult(const ScriptResult&, ScriptEdit*, QLabel*, bool preview);
       void markNotes(const QVector<Note*>&);
       void refreshList(const QString& select = QString());
@@ -233,6 +258,7 @@ class ScriptConsole : public QDockWidget {
 
    protected:
       void closeEvent(QCloseEvent*) override;
+      void changeEvent(QEvent*) override;
       void showEvent(QShowEvent*) override;
       void hideEvent(QHideEvent*) override;
 
@@ -245,7 +271,9 @@ class ScriptConsole : public QDockWidget {
       void scoreChanged();                      // another score is current, or the current one was edited
       void focusInput();
       void writeSettings();
-      static QString scriptsFolder();
+      static QString scriptsFolder();           // the Scripts folder of Preferences › General (Documents/<app>/Scripts)
+      static QString legacyScriptsFolder();     // <data folder>/scripts of the first build: read as a fallback, never moved
+      static QString scriptFile(const QString& name);     // an existing script's file (new folder first, then the old), else where it is saved
       };
 
 } // namespace Ms

@@ -149,8 +149,8 @@ the script fails), only visible marks (articulations, fermatas, staff text); mem
 embedded as bytes (`embed_lua.cmake` → `scorescript_lua.h`). Lua 5.4.9 is vendored in `thirdparty/lua` (MIT, static C library,
 `lua_standalone` for the tests). **`mscore/scriptconsole.*`**: View › Script Console (**Ctrl+Shift+P**, moved from Plugin
 Creator, which keeps its menu item; `Shortcut::load` hands the key over only in a user's file that still had the old default),
-a bottom dock in tabs with the Timeline: Console (REPL, variables persist) and Scripts (editor + saved `.lua` files in
-`<dataPath>/scripts`), a colour per kind of word, completion by context, error underline, hover help, live preview
+a bottom dock in tabs with the Timeline (its title bar's caption is gone: the tab label says it; float / close sit in the tab row): Console (REPL, variables persist; a line that fails clears too and stays in the history) and Scripts (editor + saved `.lua` files in
+the Scripts folder of Preferences › General, `PREF_APP_PATHS_MYSCRIPTS`, `Documents/<app>/Scripts` like Plugins / Styles; the first build's `<dataPath>/scripts` is read as a fallback; a run keeps the Scripts tab and its status line shows "N changes to the score" or the error), a colour per kind of word, completion by context, error underline, hover help, live preview
 (`ScoreView::setScriptPreview`, the Scripts tab's on a worker thread). Headless: `mscore --lua script.lua score [-o out]`.
 Tests: `libmscore/script/test/run.lua` (no MuseScore: `lua_standalone libmscore/script/test/run.lua`), the playground's
 `test/run.js` (Fengari; `tools/scripting/update_playground.py <page>` puts the library into the page), `tst_luascripting`.

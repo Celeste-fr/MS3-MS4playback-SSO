@@ -103,6 +103,7 @@ class PreferenceDialog : public AbstractDialog, private Ui::PrefsDialogBase {
       void selectScoreFontsDirectory();
       void selectTemplatesDirectory();
       void selectPluginsDirectory();
+      void selectScriptsDirectory();
       void selectImagesDirectory();
       void selectExtensionsDirectory();
       void zoomDefaultTypeChanged(int);

@@ -455,7 +455,7 @@ local SEL_METHODS = {"add", "remove", "text", "count", "each"}
 -- Sections come from MuseScore's instrument ids, families and groups (share/instruments/instruments.xml), never
 -- from the part's name, which may be in any language.
 local GROUP_SECTIONS = {
-  woodwinds = {"winds", "woodwinds"}, brass = {"winds", "brass"}, strings = {"strings"},
+  woodwinds = {"winds", "woodwinds"}, brass = {"brass"}, strings = {"strings"},
   ["pitched-percussion"] = {"percussion"}, ["unpitched-percussion"] = {"percussion"},
   ["marching-percussion"] = {"percussion"}, ["body-percussion"] = {"percussion"},
   vocals = {"voices"}, keyboards = {"keyboards"}, ["plucked-strings"] = {"plucked"},
@@ -564,8 +564,9 @@ local function addSection(part, name)
   part.sections[name] = true
   if not SECTIONSET[name] then SECTIONSET[name] = true; SECTIONS[#SECTIONS + 1] = name end
 end
+local HIDDEN = {}                      -- numbered names (violas1) of a section with one part: accepted, never offered
 local function buildParts(list)
-  PARTS, SECTIONS, SECTIONSET = {}, {}, {}
+  PARTS, SECTIONS, SECTIONSET, HIDDEN = {}, {}, {}, {}
   for _, s in ipairs(STATIC_SECTIONS) do SECTIONSET[s] = true; SECTIONS[#SECTIONS + 1] = s end
   local byAlias = {}
   for i, p in ipairs(list or {}) do
@@ -588,6 +589,7 @@ local function buildParts(list)
   for alias, l in pairs(byAlias) do      -- violin1, violin2 …: parts of one instrument in score order
     for k, part in ipairs(l) do
       addSection(part, alias .. k)
+      if #l < 2 then HIDDEN[alias .. k] = true end
       if not (PROPSET[alias] or QUERY[alias] or MARKS[alias] or DURATIONS[alias] or DYN[alias]) then addSection(part, alias) end
     end
   end
@@ -1385,6 +1387,11 @@ local DOC = {
 }
 DOC["sel.count"] = "count(): the number of notes in the selection"
 local function sectionDoc(s)
+  if s == "winds" then
+    local w = {}
+    for _, p in ipairs(PARTS) do if p.sections.winds then w[#w + 1] = p.name end end
+    return "woodwinds only (brass is `brass`): " .. (#w > 0 and concat(w, ", ") or "no part of this score")
+  end
   local names = {}
   for _, p in ipairs(PARTS) do if p.sections[s] then names[#names + 1] = p.name end end
   if #names == 0 then return "no part of this score" end
@@ -1400,6 +1407,28 @@ local function kindOf(w)
   if DYN[w] then return "dynamic" end
   return nil
 end
+local LUA_DOC = {
+  ["and"] = "Lua keyword: both conditions true", ["or"] = "Lua keyword: either condition true",
+  ["not"] = "Lua keyword: the opposite of a condition", ["if"] = "Lua keyword: if cond then … end",
+  ["then"] = "Lua keyword: starts the body of an if", ["else"] = "Lua keyword: the other branch of an if",
+  ["elseif"] = "Lua keyword: another condition of an if", ["end"] = "Lua keyword: closes if, for, while, function, do",
+  ["for"] = "Lua keyword: a loop, for i = 1, 10 do … end, or for n in sel.each() do … end",
+  ["while"] = "Lua keyword: while cond do … end", ["repeat"] = "Lua keyword: repeat … until cond",
+  ["until"] = "Lua keyword: ends a repeat loop", ["do"] = "Lua keyword: starts a block or a loop body",
+  ["in"] = "Lua keyword: for x in … do", ["local"] = "Lua keyword: a variable only in this block",
+  ["function"] = "Lua keyword: function name(args) … end", ["return"] = "Lua keyword: give a value back",
+  ["break"] = "Lua keyword: leave the loop", ["goto"] = "Lua keyword: jump to a label",
+  ["true"] = "Lua keyword: the value true", ["false"] = "Lua keyword: the value false", ["nil"] = "Lua keyword: no value",
+  print = "print(…): write values to the console", tostring = "tostring(v): v as text", tonumber = "tonumber(s): text as a number, or nil",
+  type = "type(v): \"number\", \"string\", \"table\" …", pairs = "pairs(t): loop over every key and value",
+  ipairs = "ipairs(t): loop over a list in order", select = "select(n, …): the arguments from n on, or select(\"#\", …) their count",
+  error = "error(message): stop the script with a message", assert = "assert(v, message): stop unless v is true",
+  pcall = "pcall(f, …): call f, catching its errors", setmetatable = "setmetatable(t, mt): give a table its metatable",
+  getmetatable = "getmetatable(t): a table's metatable", rawequal = "rawequal(a, b): equal without metamethods",
+  rawlen = "rawlen(t): length without metamethods", math = "Lua library: math.floor, math.max, math.abs …",
+  string = "Lua library: string.format, string.sub, string.rep …", table = "Lua library: table.insert, table.sort, table.concat …",
+  utf8 = "Lua library: utf8.char, utf8.len …",
+}
 function M.help(word)
   local kind = kindOf(word)
   if kind == "part" then return sectionDoc(word), kind end
@@ -1407,6 +1436,13 @@ function M.help(word)
   if kind == "duration" then return sformat("%s note: duration == %s (%s quarter notes)", word, word, fmtNum(DURATIONS[word])), kind end
   if kind == "dynamic" then return sformat("dynamic: dynamic == %s, dynamic >= %s", word, word), kind end
   if DOC[word] then return DOC[word], kind or "method" end
+  if kind == "keyword" then return LUA_DOC[word] or "Lua keyword", kind end
+  if kind == nil and not word:find("[^%w_]") then
+    local v = newStd()[word]
+    if v ~= nil and (type(v) == "function" or type(v) == "table") then
+      return LUA_DOC[word] or ((type(v) == "table" and "Lua library: " or "Lua function: ") .. word), "builtin"
+    end
+  end
   return nil, kind
 end
 -- word -> kind, for the highlighter: keyword, query, property, part, mark, duration, dynamic, method, builtin
@@ -1527,13 +1563,13 @@ function M.complete(text, cursor)
   if query then
     local present = {}
     for _, part in ipairs(PARTS) do for s in pairs(part.sections) do present[s] = true end end
-    for _, s in ipairs(SECTIONS) do if present[s] then add(s, "part") end end
+    for _, s in ipairs(SECTIONS) do if present[s] and not HIDDEN[s] then add(s, "part") end end
     for _, w in ipairs(PROPS) do add(w, "property") end
     marks()
     for _, w in ipairs{"not", "and", "or", "true", "false", "nil"} do add(w, "keyword", "Lua keyword") end
     for _, d in ipairs(DUR_NAMES) do add(d, "duration") end
     for _, d in ipairs(DYN_NAMES) do add(d, "dynamic") end
-    for _, s in ipairs(SECTIONS) do if not present[s] then add(s, "part") end end
+    for _, s in ipairs(SECTIONS) do if not present[s] and not HIDDEN[s] then add(s, "part") end end
   else
     for _, q in ipairs(QUERY_NAMES) do add(q, "query") end
     local kws = {}

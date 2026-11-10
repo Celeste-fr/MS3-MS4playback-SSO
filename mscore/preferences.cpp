@@ -137,6 +137,7 @@ void Preferences::init(bool storeInMemoryOnly)
             {PREF_APP_PATHS_MYSCOREFONTS,                          new StringPreference(QFileInfo(QString("%1/%2").arg(wd, QCoreApplication::translate("scorefonts_directory", "Score Fonts"))).absoluteFilePath(), false)},
             {PREF_APP_PATHS_MYSCORES,                              new StringPreference(QFileInfo(QString("%1/%2").arg(wd, QCoreApplication::translate("scores_directory", "Scores"))).absoluteFilePath(), false)},
             {PREF_APP_PATHS_MYSOUNDFONTS,                          new StringPreference(QFileInfo(QString("%1/%2").arg(wd, QCoreApplication::translate("soundfonts_directory", "SoundFonts"))).absoluteFilePath(), false)},
+            {PREF_APP_PATHS_MYSCRIPTS,                             new StringPreference(QFileInfo(QString("%1/%2").arg(wd, QCoreApplication::translate("scripts_directory", "Scripts"))).absoluteFilePath(), false)},
             {PREF_APP_PATHS_MYSHORTCUTS,                           new StringPreference(QFileInfo(QString("%1/%2").arg(wd, QCoreApplication::translate("shortcuts_directory", "Shortcuts"))).absoluteFilePath(), false)},
             {PREF_APP_PATHS_MYSTYLES,                              new StringPreference(QFileInfo(QString("%1/%2").arg(wd, QCoreApplication::translate("styles_directory", "Styles"))).absoluteFilePath(), false)},
             {PREF_APP_PATHS_MYTEMPLATES,                           new StringPreference(QFileInfo(QString("%1/%2").arg(wd, QCoreApplication::translate("templates_directory", "Templates"))).absoluteFilePath(), false)},

@@ -413,6 +413,43 @@
             </property>
            </widget>
           </item>
+          <item row="8" column="0">
+           <widget class="QLabel" name="label_scriptsFolder">
+            <property name="text">
+             <string>Scripts:</string>
+            </property>
+           </widget>
+          </item>
+          <item row="8" column="1">
+           <widget class="QLineEdit" name="myScripts">
+            <property name="accessibleName">
+             <string>Script folder</string>
+            </property>
+            <property name="accessibleDescription">
+             <string>Insert path to script folder</string>
+            </property>
+           </widget>
+          </item>
+          <item row="8" column="2">
+           <widget class="QToolButton" name="myScriptsButton">
+            <property name="focusPolicy">
+             <enum>Qt::StrongFocus</enum>
+            </property>
+            <property name="accessibleName">
+             <string>Choose script folder</string>
+            </property>
+            <property name="accessibleDescription">
+             <string>Opens a dialog for selecting the script folder</string>
+            </property>
+            <property name="text">
+             <string notr="true"/>
+            </property>
+            <property name="icon">
+             <iconset resource="musescore.qrc">
+              <normaloff>:/data/icons/document-open.svg</normaloff>:/data/icons/document-open.svg</iconset>
+            </property>
+           </widget>
+          </item>
          </layout>
         </widget>
        </item>
@@ -4595,6 +4632,8 @@ Needs the MuseScore 4 dynamics method in the Synthesizer.</string>
   <tabstop>myTemplatesButton</tabstop>
   <tabstop>myPlugins</tabstop>
   <tabstop>myPluginsButton</tabstop>
+  <tabstop>myScripts</tabstop>
+  <tabstop>myScriptsButton</tabstop>
   <tabstop>mySoundfonts</tabstop>
   <tabstop>mySoundfontsButton</tabstop>
   <tabstop>myImages</tabstop>
