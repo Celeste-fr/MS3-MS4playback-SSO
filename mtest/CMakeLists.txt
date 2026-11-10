@@ -184,6 +184,7 @@ subdirs (
         libmscore/playability
         libmscore/tempochange
         libmscore/phrasemark
+        libmscore/scripting            # Lua score scripts: libmscore/script/scriptengine.h
         libmscore/marcatolevel
         libmscore/performancetechnique
         libmscore/selectionfilter

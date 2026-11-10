@@ -335,6 +335,7 @@ class ScoreView : public QWidget, public MuseScoreView {
       // the Leading lanes' bands behind the music (leadinglane.h; view only): the page's, in page coordinates; the bands
       // cached by the metaTag's text
       void paintLeadingBands(QPainter& p, Page* page);
+      QVector<QRectF> _scriptPreview;     // the notes a script being typed matches (scriptconsole.h), canvas rectangles
       QString _leadingTag;
       std::map<const Part*, std::vector<std::pair<int, int>>> _leadingBands;
       qint64 _leadingPaperKey { 0 };
@@ -410,6 +411,7 @@ class ScoreView : public QWidget, public MuseScoreView {
 
    public:
       ScoreView(QWidget* parent = 0);
+      void setScriptPreview(const QVector<QRectF>&);  // a tint over these notes (the script console; view only; empty: none)
       ~ScoreView();
 
       QPixmap* fgPixmap() { return _fgPixmap; }

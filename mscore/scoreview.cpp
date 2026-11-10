@@ -1193,6 +1193,19 @@ void ScoreView::paintLeadingBands(QPainter& p, Page* page)
       }
 
 //---------------------------------------------------------
+//   setScriptPreview
+//    the notes the script console's text matches while it is typed: a tint over each, view only
+//---------------------------------------------------------
+
+void ScoreView::setScriptPreview(const QVector<QRectF>& rects)
+      {
+      if (rects.isEmpty() && _scriptPreview.isEmpty())
+            return;
+      _scriptPreview = rects;
+      update();
+      }
+
+//---------------------------------------------------------
 //   paintPageBorder
 //---------------------------------------------------------
 
@@ -1624,6 +1637,19 @@ void ScoreView::paint(const QRect& r, QPainter& p)
             }
 
       // Draw foto lasso to ensure that it is above everything else
+      if (!_scriptPreview.isEmpty() && !_score->printing()) {    // the script console's live preview (scriptconsole.h)
+            p.save();
+            p.setTransform(_matrix);
+            p.setPen(Qt::NoPen);
+            p.setBrush(QColor(255, 152, 0, 110));
+            const qreal grow = _score->spatium() * 0.25;
+            for (const QRectF& nr : qAsConst(_scriptPreview)) {
+                  const QRectF rr = nr.adjusted(-grow, -grow, grow, grow);
+                  if (rr.intersects(fr))
+                        p.drawRoundedRect(rr, grow, grow);
+                  }
+            p.restore();
+            }
       if (lassoToDraw)
             lassoToDraw->drawEditMode(&p, editData);
       if (peakGripToDraw)

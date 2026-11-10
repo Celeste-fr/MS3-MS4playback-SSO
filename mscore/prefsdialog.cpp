@@ -223,6 +223,7 @@ PreferenceDialog::PreferenceDialog(QWidget* parent)
       connect(myScoreFontsButton, &QToolButton::clicked, this, &PreferenceDialog::selectScoreFontsDirectory);
       connect(myTemplatesButton, &QToolButton::clicked, this, &PreferenceDialog::selectTemplatesDirectory);
       connect(myPluginsButton, &QToolButton::clicked, this, &PreferenceDialog::selectPluginsDirectory);
+      connect(myScriptsButton, &QToolButton::clicked, this, &PreferenceDialog::selectScriptsDirectory);
       connect(mySoundfontsButton, &QToolButton::clicked, this, &PreferenceDialog::changeSoundfontPaths);
       connect(myImagesButton, &QToolButton::clicked, this, &PreferenceDialog::selectImagesDirectory);
       connect(myExtensionsButton, &QToolButton::clicked, this, &PreferenceDialog::selectExtensionsDirectory);
@@ -232,6 +233,7 @@ PreferenceDialog::PreferenceDialog(QWidget* parent)
       myScoreFontsButton->setIcon(*icons[int(Icons::fileOpen_ICON)]);
       myTemplatesButton->setIcon(*icons[int(Icons::fileOpen_ICON)]);
       myPluginsButton->setIcon(*icons[int(Icons::fileOpen_ICON)]);
+      myScriptsButton->setIcon(*icons[int(Icons::fileOpen_ICON)]);
       mySoundfontsButton->setIcon(*icons[int(Icons::edit_ICON)]);
       myImagesButton->setIcon(*icons[int(Icons::fileOpen_ICON)]);
       myExtensionsButton->setIcon(*icons[int(Icons::fileOpen_ICON)]);
@@ -361,6 +363,7 @@ void PreferenceDialog::start()
                   new StringPreferenceItem(PREF_APP_PATHS_SCOREORDERLIST2, scoreOrderList2),
                   new StringPreferenceItem(PREF_APP_PATHS_MYIMAGES, myImages),
                   new StringPreferenceItem(PREF_APP_PATHS_MYPLUGINS, myPlugins),
+                  new StringPreferenceItem(PREF_APP_PATHS_MYSCRIPTS, myScripts),
                   new StringPreferenceItem(PREF_APP_PATHS_MYSCOREFONTS, myScoreFonts),
                   new StringPreferenceItem(PREF_APP_PATHS_MYSCORES, myScores),
                   new StringPreferenceItem(PREF_APP_PATHS_MYSOUNDFONTS, mySoundfonts),
@@ -1963,6 +1966,22 @@ void PreferenceDialog::selectPluginsDirectory()
          );
       if (!s.isNull())
             myPlugins->setText(s);
+      }
+
+//---------------------------------------------------------
+//   selectScriptsDirectory
+//---------------------------------------------------------
+
+void PreferenceDialog::selectScriptsDirectory()
+      {
+      QString s = QFileDialog::getExistingDirectory(
+         this,
+         tr("Choose Script Folder"),
+         myScripts->text(),
+         QFileDialog::ShowDirsOnly | (preferences.getBool(PREF_UI_APP_USENATIVEDIALOGS) ? QFileDialog::Options() : QFileDialog::DontUseNativeDialog)
+         );
+      if (!s.isNull())
+            myScripts->setText(s);
       }
 
 //---------------------------------------------------------

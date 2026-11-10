@@ -116,6 +116,70 @@ presets, CC1 / CC11 / CC21 on channel 1; Linux Vial bundles in ~/MuseScore/ms3fo
 after vial sso's preset update, not shipped: paused too, its state in ~/vial-sso/HANDOFF.md; only CC1 works now). Owner limits: Max nearly out, then Pro (1/20 the usage): one subagent at a time, small
 targeted fixes, the owner picks what he hears.
 
+## Lua console (branch `lua-console`, 2026-11-09, from main 58984383d6; not merged, not pushed)
+
+Score scripting in Lua, decided with the owner 2026-11-09 and adjusted by the design critic's eleven points the same
+day (CLAUDE.md › Score scripts in Lua is the map; the design is in the headers of `libmscore/script/scorescript.lua`,
+`scriptengine.h`, `mscore/scriptconsole.h`).
+
+What exists
+- `thirdparty/lua`: Lua 5.4.9 (sha256 checked against lua.org), target `lua`, `lua_standalone` for tests.
+- `libmscore/script/scorescript.lua`: the whole language (rewrite, queries, selections, names, sandbox, preview, editor
+  support: `check`, `complete`, `help`, `words`). One file for MuseScore, the playground and plain lua.
+- `libmscore/script/scriptengine.*`: the host (snapshot of the master score, run, edits as one undo step, limits).
+- `mscore/scriptconsole.*`, `ScoreView::setScriptPreview`, the action `toggle-script-console` (View menu, Ctrl+Shift+P),
+  the shortcut hand-over in `Shortcut::load`, `mscore --lua script.lua score [-o out]`.
+- Tests: `libmscore/script/test/run.lua` (+ `k550.lua`, made by `make_k550.js` from the playground's data),
+  `mtest/libmscore/scripting/tst_luascripting.cpp` (the target can't be `tst_scripting`: that is the QML plug-in test),
+  the playground's `test/run.js`.
+- The playground (`/data/ui-review/lua-play/index.html`, outside the repo) now embeds this library:
+  `python3 tools/scripting/update_playground.py /data/ui-review/lua-play/index.html` after any change to
+  `scorescript.lua` or `tools/scripting/playground_engine.js`, then `node /data/ui-review/lua-play/test/run.js`.
+
+Decisions taken here that the owner may want to change
+- `beat` counts the time signature's beats (2/2: 1, 1.5, 2; 6/8: two beats), `measure` is the printed number, `index`
+  the counted one: the coordinator's defaults. The playground's K. 550 data still has quarter-note beats (its own
+  extraction): the two differ until that data is re-extracted.
+- Exact fractions: Lua can't make `beat == 4/3` exact by itself (`==` between a number and an object never calls a
+  metamethod), so the rewrite turns `beat == x` / `duration == x` into a comparison within 1e-6.
+- Dynamics are values (`dynamic >= mf`); `dynamic == "p"` still works (rewritten to the same comparison). Locals named
+  `p` or `f` are allowed although they are dynamics' names; every other vocabulary name is refused as a local.
+- `winds` = woodwinds only (the owner, 2026-11-10); brass only through `brass`. A selection, `slur` and `dynamic` are accepted as conditions besides true / false / a
+  mark (the note is in it / has one).
+- A failed script changes nothing (the undo step is rolled back). `--lua` without `-o` writes nothing.
+- Phrase marks don't count as slurs. sf / sfz / rfz leave the dynamic in force as it was; fp, sfp leave p.
+- Scripts are saved in the Scripts folder (owner 2026-11-10: `Documents/MuseScore3Evo/Scripts`, a Preferences › General row beside Plugins / Styles, `PREF_APP_PATHS_MYSCRIPTS`, created at start like the others) as `<name>.lua`; numbered names (violas1) are offered in completion only for a section of two or more parts, accepted when typed; the console is created when first shown (so a saved window
+  layout doesn't restore it before that).
+
+Untested / open (fill in as they are tried)
+- Built on Linux only (2026-11-10, Release, `~/MuseScore/builds/lua-console-build`): mscore and the tests.
+  `tst_luascripting` 13 passed; `lua_standalone libmscore/script/test/run.lua` 138 checks; the playground's
+  `node test/run.js` 103 (Fengari, the same library); unchanged: `tst_midi` 97, `tst_liveintegration` 71,
+  `tst_liveequivalence` 93 / 5 skipped, `tst_soundlibrary` 169 / 7 skipped. `mscore --lua` tried headless (output,
+  `-o` saves, a failing script exits 1 and saves nothing).
+- Windows / MSVC: nothing compiled there (Lua as C with MSVC, `embed_lua.cmake`, the console). `tools/check_windows_names.sh`
+  was run: none found (thirdparty/lua excluded: upstream C).
+- The window was tried only under Xvfb without a window manager (xdotool, screenshots; the test synth, no audio):
+  Ctrl+Shift+P shows / hides the dock and focuses the line, a run adds marks, Ctrl+Z in the score undoes it as one step,
+  colours, the completion popup with kinds and help, the error underline with did-you-mean, the live preview tint and
+  its count, console variables kept between lines, the Scripts tab (New, saved file, Ctrl+Enter, find bar, its own
+  undo), Esc back to the score. Not seen: the dock in tabs with the Timeline, a dark theme, tool tips, continuous
+  view and parts, Windows and macOS, the shortcut in note entry / play / image capture. Cosmetic: the selected
+  completion row keeps its coloured text (hard to read). UI rule: real screenshots before a merge (memory "UI like
+  official MuseScore"); strings to check against MuseScore's wording: "Script Console", "Console", "Scripts", "New",
+  "Delete", "Run", "Find:", "%1 notes", "%1 changes when run", "%1 changes to the score".
+- The shortcut hand-over (`Shortcut::load`) has no automated test; tried by hand under Xvfb with two old
+  shortcuts.xml files: Plugin Creator on Ctrl+Shift+P alone: the console opens; Plugin Creator on Ctrl+Shift+P and a
+  second key: Plugin Creator opens, nothing moves.
+- The preview worker thread with a real score (cancel while typing, a result arriving after an edit).
+- Round trip to 3.6: a script writes only articulations, fermatas and staff text, nothing new in the file; not run
+  through `tools/roundtrip/roundtrip2.py`.
+- Known gaps: time inside one C function isn't limited (a pathological string pattern); grace notes get no fermata;
+  cross-staff notes count on the staff they are drawn on (`staff`), untested; `text()` puts staff text on the chord's
+  staff, voice 1; an excerpt (part) view runs scripts on the master score and marks matches on the part's copies
+  (untested); no `select()` of the matches yet; the playground page was not opened in a browser after the switch to
+  this library (its tests pass under node).
+
 ## Render ahead and the late-audio warning (branch `render-ahead`, 2026-10-31, from private/main c54b8d9043; not merged)
 
 The owner approved both (2026-10-31): his live playback sometimes turned into noise ("pure feedback noise", piano on SSO)

@@ -83,15 +83,28 @@ add_library (libmscore STATIC
       connector.cpp location.cpp skyline.cpp
       scorediff.cpp
       unrollrepeats.cpp
+      script/scriptengine.h script/scriptengine.cpp
+      ${CMAKE_CURRENT_BINARY_DIR}/scorescript_lua.h
+      )
+
+# Score scripting (script/scriptengine.h): the Lua query library goes into the program as bytes
+add_custom_command(
+      OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/scorescript_lua.h
+      COMMAND ${CMAKE_COMMAND} -DIN=${CMAKE_CURRENT_SOURCE_DIR}/script/scorescript.lua
+              -DOUT=${CMAKE_CURRENT_BINARY_DIR}/scorescript_lua.h -DNAME=scorescript_lua
+              -P ${CMAKE_CURRENT_SOURCE_DIR}/script/embed_lua.cmake
+      DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/script/scorescript.lua ${CMAKE_CURRENT_SOURCE_DIR}/script/embed_lua.cmake
+      VERBATIM
       )
 
 target_include_directories(libmscore
    PRIVATE
       ${PROJECT_SOURCE_DIR}/thirdparty/dtl
       ${PROJECT_SOURCE_DIR}/global
+      ${CMAKE_CURRENT_BINARY_DIR}
    )
 
-target_link_libraries(libmscore ${FREETYPE_LIBRARIES} preferences)
+target_link_libraries(libmscore ${FREETYPE_LIBRARIES} preferences lua)
 
 if (AVSOMR)
     target_link_libraries(libmscore avsomr)
