@@ -245,6 +245,8 @@ check("the same notes again (same signature): the selection is still valid", not
 d2 = dofile(dir .. "/k550.lua"); d2.signature = "b"; table.remove(d2.notes); M.setScore(d2)
 r = run("s.add(marcato)", {persist = true})
 check("after the score's notes changed: a clear error", r.error == "line 1: the score changed since this selection was made: run the query again", r.error)
+r = run("s.add(marcato)", {persist = true, echo = true})
+check("… with its line in the console's echo mode too", r.error == "line 1: the score changed since this selection was made: run the query again", r.error)
 M.resetConsole()
 fresh()
 

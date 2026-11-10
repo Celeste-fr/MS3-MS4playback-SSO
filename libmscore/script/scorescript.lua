@@ -1049,6 +1049,7 @@ function LIB.__chain(...)
   end
   return true
 end
+LIB.__pack = tpack
 function LIB.__near(a, b)                 -- beat == 1 + 1/3
   if type(a) == "number" and type(b) == "number" then return abs(a - b) < 1e-6 end
   return a == b
@@ -1305,7 +1306,8 @@ function M.run(src, opts)
   if not code then return finish(calls, line) end
   result.code = code
   local fn, err
-  if opts.echo then fn = load("return " .. code, "=script", "t", ENV) end
+  -- (packed, so that the line's call isn't a tail call: its errors keep their line)
+  if opts.echo then fn = load("return __pack(" .. code .. "\n)", "=script", "t", ENV) end
   local echo = fn ~= nil
   if not fn then fn, err = load(code, "=script", "t", ENV) end
   if not fn then
@@ -1330,9 +1332,9 @@ function M.run(src, opts)
   if echo then
     local queried = false
     for _, entry in ipairs(LOG) do if entry.kind == "query" then queried = true end end
-    local t = {}                          -- (a query has printed its own result; a selection is no news)
-    for i = 2, r.n do
-      if not isSel(r[i]) and not (queried and r.n == 2) then t[#t + 1] = type(r[i]) == "number" and fmtNum(r[i]) or tostring(r[i]) end
+    local t, v = {}, r[2]                 -- (a query has printed its own result; a selection is no news)
+    for i = 1, v.n do
+      if not isSel(v[i]) and not (queried and v.n == 1) then t[#t + 1] = type(v[i]) == "number" and fmtNum(v[i]) or tostring(v[i]) end
     end
     if #t > 0 then log("value", concat(t, "  "), nil) end
   end
