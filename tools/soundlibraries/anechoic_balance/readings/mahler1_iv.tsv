@@ -943,7 +943,7 @@ hn1	accent	64:1		^
 hn1	notes	66:1	73:3		chords 68-72; "zu 2." at 70:4
 hn1	dyn	66:1		ff	
 hn1	accent	66:1		^	
-hn1	text	67:1		I. III. (read "III:")	two-note chord on staff 1.3.5; horn 5 rests (uncertain reading of the label)
+hn1	text	67:1		I. III. (read "III:")	two-note chord on staff 1.3.5; horn 5 rests; confirmed, owner 2026-11-10 (readings check u055/u057: "the top note is I and bottom note is III")
 hn1	dyn	67:1		mf	
 hn1	text	70:4		zu 2.	
 hn1	cresc	73:1	73:3	hairpin	
@@ -1114,7 +1114,7 @@ hn3	accent	64:1		^
 hn3	notes	66:1	73:3		
 hn3	dyn	66:1		ff	
 hn3	accent	66:1		^	
-hn3	text	67:1		I. III. (read "III:")	two-note chord on staff 1.3.5; horn 5 rests (uncertain reading of the label)
+hn3	text	67:1		I. III. (read "III:")	two-note chord on staff 1.3.5; horn 5 rests; confirmed, owner 2026-11-10 (readings check u055/u057: "the top note is I and bottom note is III")
 hn3	dyn	67:1		mf	
 hn3	accent	71:1		^	
 hn3	accent	71:3		^	
@@ -1838,7 +1838,8 @@ trb1	cresc	53:1	54:1	hairpin
 trb1	dyn	54:1		ff	
 trb1	dyn	54:3		ff	
 trb1	notes	73:4	78:2		chord
-trb1	text	73:4		staff label "1. Pos."	uncertain whether trombone 2 also plays
+trb1	text	73:4		staff label "1. Pos."	uncertain whether trombone 2 also plays; UNRESOLVED, owner 2026-11-10 (readings check u066: unsure)
+trb1	exclude	73:4	78:2		u066 unresolved: the staff label was read from the margin, the owner unsure; span left out until re-read
 trb1	dyn	73:4		ff	
 trb1	accent	74:1		^	
 trb1	accent	74:3		^	
@@ -1864,7 +1865,9 @@ trb2	accent	7:3		^
 trb2	accent	8:1		^	
 trb2	dim	8:1	9:1	text	
 trb2	dim	9:1	10:1	hairpin	
-trb2	text	9:3		lower voice ends with eighth at 9:3	uncertain which player
+trb2	text	9:3		lower voice ends with eighth at 9:3	uncertain which player; UNRESOLVED, owner 2026-11-10 (readings check u067: unsure, "what")
+trb2	exclude	9:3	10:1		u067 unresolved: which player ends at 9:3; span left out until re-read
+trb1	exclude	9:3	10:1		u067 unresolved: which player ends at 9:3; span left out until re-read
 trb2	notes	12:3	12:3		eighth chord
 trb2	dyn	12:3		ff	
 trb2	notes	14:1	14:1		
@@ -1963,7 +1966,7 @@ trb3	dyn	30:1		ff
 trb3	accent	30:1		^	
 trb3	dim	31:1	31:4	hairpin	
 trb3	dyn	32:1		mf	
-trb3	dim	37:1	38:4	hairpin	uncertain direction
+trb3	dim	37:1	38:4	hairpin	uncertain direction; owner 2026-11-10 (readings check u069: ok, "beat 1?": the start beat questioned, unchanged)
 trb3	dyn	39:1		p	
 trb3	notes	41:1	42:1		
 trb3	accent	41:1		fp	
@@ -2002,7 +2005,7 @@ tuba	notes	30:1	39:1		tied whole notes
 tuba	dyn	30:1		ff	
 tuba	dim	31:1	31:4	hairpin	
 tuba	dyn	32:1		mf	
-tuba	dim	37:1	38:4	hairpin	uncertain direction
+tuba	dim	37:1	38:4	hairpin	uncertain direction; owner 2026-11-10 (readings check u069: ok, "beat 1?": the start beat questioned, unchanged)
 tuba	dyn	39:1		p	
 tuba	notes	41:1	42:1		
 tuba	accent	41:1		fp	

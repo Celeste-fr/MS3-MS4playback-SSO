@@ -624,8 +624,8 @@ vla	dim	40:1	41:1	text
 vl1	dyn	41:1		p	held chord
 vl2	dyn	41:1.5		f	Vl. II "div."
 vla	dyn	41:1.5		f	Vl. II "div."
-vc	dyn	41:1		f	no dynamic printed for Vc. u. Kb.; the nearest f sits under the Br. staff and belongs to it: uncertain, maybe none
-kb	dyn	41:1		f	no dynamic printed for Vc. u. Kb.; the nearest f sits under the Br. staff and belongs to it: uncertain, maybe none
+# removed, owner 2026-11-10 (readings check u053/u054: "belongs to the staff above I think"): the f between the Br. and Vc.u.Kb. staves is the violas' (their row: vla dyn 41:1.5 f); none printed for Vc. u. Kb. | was: vc | dyn | 41:1 |  | f | no dynamic printed for Vc. u. Kb.; the nearest f sits under the Br. staff and belongs to it: uncertain, maybe none
+# removed, owner 2026-11-10 (readings check u053/u054: "belongs to the staff above I think"): the f between the Br. and Vc.u.Kb. staves is the violas' (their row: vla dyn 41:1.5 f); none printed for Vc. u. Kb. | was: kb | dyn | 41:1 |  | f | no dynamic printed for Vc. u. Kb.; the nearest f sits under the Br. staff and belongs to it: uncertain, maybe none
 vl1	dim	42:1	47:1	text	dashes through bar 46
 vl2	dim	42:1	47:1	text	dashes through bar 46
 vla	dim	42:1	47:1	text	dashes through bar 46

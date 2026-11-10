@@ -172,7 +172,7 @@ D, the five string sections (dB; the map's `heldOffset`; `tst_soundlibrary::leve
 
 | Technique | Violins 1 | Violins 2 | Violas | Celli | Basses | Source, uncertainty |
 |---|---|---|---|---|---|---|
-| Spiccato, Short 0.5 | -3.4 | -3.4 | -3.4 | -3.4 | -3.4 | Spheres K. 550, staccato - held at f, perceived (STL), pooled over Violins 1, Celli, Basses; 90 % [-5.7, -0.9] |
+| Spiccato, Short 0.5 | -3.4 | -3.4 | -3.4 | -3.4 | -3.4 | Spheres K. 550, staccato - held at f, perceived (STL), pooled over Violins 1, Celli, Basses (3 sections of one ensemble); bootstrap 90 % [-5.7, -0.9], t-based [-8.7, +1.9]: the sign is not established |
 | Short 1.0 | +0.3 | +0.3 | +0.3 | +0.3 | +0.3 | Spheres K. 550, quarters - wholes at p (Celli, Basses), pooled; 90 % [-2.2, +2.3] |
 | Pizzicato | -7 (pp) .. -9 (ff) | -7 .. -9 | -9 .. -5 | -12 .. -8 | -6 .. -7 | Meyer 2009 ch. 3, pizz - arco, sound power (not perceived: several dB) |
 | Pizzicato Bartók | SSO's (+9.4) | SSO's (+6.5) | SSO's (+4.9) | SSO's (+4.4) | 0 | no real data (SSO's: an assumption); Basses below |
@@ -188,7 +188,11 @@ D, the five string sections (dB; the map's `heldOffset`; `tst_soundlibrary::leve
   typo) against bar 198, minus the notes whose level dip is no deeper than the held note's (1 cello, 4 bass notes).
   Per section: Violins 1 -0.4 [-1.4, +0.6] (26 staccatos / 2 plays of one held note), Celli -6.7 [-7.1, -5.9] (55 / 1),
   Basses -3.1 [-3.6, -2.2] (51 / 1). **Pooled -3.4, 90 % [-5.7, -0.9]**: the mean of the sections' differences, its
-  interval by a two-level bootstrap (sections resampled, then each section's notes; 20000 draws). Chosen over
+  interval by a two-level bootstrap (sections resampled, then each section's notes; 20000 draws). With three sections
+  of one ensemble that bootstrap is too narrow: the t interval on the three differences is 90 % [-8.7, +1.9] and includes
+  0, so the data suggest that a staccato is softer than a held note but do not establish the sign. A re-measurement from
+  the stems (each staccato over its own length) gives -2.6 [-4.7, -0.5]; the 2026-10-15 measuring script is lost, so
+  which window it used is unknown (docs/OPEN_ITEMS.md 36), and -3.4 stays until the owner decides. Chosen over
   per-section values by data quality: one held note per section (so the per-section intervals hold only the staccatos'
   spread), and the sections differ by 3.1 dB (SD), about what one held note varied by in the first readings (2.6-4.2 dB
   SD): one held note each can't tell a section's own difference from its held note's. Violins 2 and Violas (not
@@ -222,8 +226,9 @@ D, the five string sections (dB; the map's `heldOffset`; `tst_soundlibrary::leve
   2026-10-15 validation), so D = 0: SSO's balance at the matched level (an assumption).
 
 **Why B was replaced** (the validation, 2026-10-15): B took D from SSO's recordings at the loudest layers. Against
-real players that has the wrong sign for the bowed shorts (B: Spiccato +1.6 .. +9.2 dB over the Long; K. 550's sections:
--3.0 .. -6.0 dB) and is too high for the pizzicato (B: -0.9 .. +4.1; Meyer: -5 .. -12).
+real players that is too high for the bowed shorts (B: Spiccato +1.6 .. +9.2 dB over the Long; K. 550's sections:
+-0.4 .. -6.7 dB with the corrected readings, -3.0 .. -6.0 with the first) and for the pizzicato (B: -0.9 .. +4.1; Meyer:
+-5 .. -12).
 
 **Why the first 2 (A, the same day) failed**: it played the written dynamic's velocity on the technique's own curve, so
 SSO's mapping between the layers decided the balance: Whence's staccatos came out 13-21 dB under the Long (Violins 1 107 ->
@@ -525,7 +530,7 @@ Where `sectionLevel2` comes from (`tools/soundlibraries/section_balance_cl.py` w
   TU's measure for a decaying tone (the fast-weighted pressure squared averaged over the recording: `tu_transient.py`
   reproduces the CSV's harp values within 0.005 dB) as an energy, SSO's harp (`sso_percussion_levels.json`, velocity 64)
   over the same span after the note-on; TU's mp by rule D; to Clark & Luce's scale by the median (M2 + sectionLevel's D)
-  over the nine solo winds with their own Clark & Luce instrument (RMS 3.3 dB): -9.81 dB since iteration 8's directivity (-10.41 before), about ±4 dB. The timpani
+  over the nine solo winds with their own Clark & Luce instrument (RMS 3.5 dB): -9.81 dB since iteration 8's directivity (-10.41 before), about ±4 dB. The timpani
   measured that way (+1.65) were not applied (TU's D2 series name no markings: mp's step unknown by about 7 dB).
 - The timpani (since 2026-10-15, Iterations 10 and 14): the Spheres dataset's Romeo and Juliet (1880 version), every part
   recorded alone, markings read from the 1881 Bote & G. Bock full score (review page
@@ -533,39 +538,54 @@ Where `sectionLevel2` comes from (`tools/soundlibraries/section_balance_cl.py` w
   the timpani's energy per hit at f (11 hits, Allegro giusto) and p (145 hits, the coda: a sixteenth triplet and an eighth
   on every beat), position-corrected by the seats' sweeps, put on Clark & Luce's scale by the eight string lines at mf in
   the same coda (their Clark & Luce power less their level; RMS 2.3 dB): 98.6 / 72.4 dB re 1 pW s, mp by a third of
-  p -> f; SSO's timpani energy at velocity 64 over keys 46 .. 62 (`sso_percussion_levels.json`): **-6.92**, about ±3 dB
-  (scale RMS 2.3, main microphone L only: Zenodo stopped answering; L + C without the celli moved the levels by under
-  0.5). One recording, one player; TU Berlin's D2 series (no markings) rises 20.9 .. 24.7 dB over the same three steps
-  against the Spheres' 26.3 (`spheres_timpani.py`, `spheres_timpani.json`; a velocity patch: realRange below by CC11).
+  p -> f; SSO's timpani energy at velocity 64 over keys 46 .. 62 (`sso_percussion_levels.json`): **-6.92**, about ±5 dB:
+  the scale alone is about ±3 (scale RMS 2.3, main microphone L only: Zenodo stopped answering; L + C without the celli
+  moved the levels by under 0.5), and it is one recording and one player, f from 11 hits in two passages (8 + 3) against
+  p from one passage of fast triplets; the one check of the scale at another marking, Flute 1 at its written pp, lies
+  7.3 dB off the strings' (docs/BALANCE_LOG.md › Iteration 10). TU Berlin's D2 series (no markings) rises 20.9 .. 24.7 dB
+  over the same three steps against the Spheres' 26.3, which as `realSteps` would be 35 .. 41 against 43.8 (`spheres_timpani.py`, `spheres_timpani.json`; a velocity patch: realRange below by CC11).
 - The Grand Piano (since 2026-10-15, Iteration 11): Meyer 2009 § 3.4.2 (two-voice scales, lid open, no pedal: pp 88, ff
   104 dB), mp at 2 of Meyer's 5 steps, moved to Clark & Luce's scale by the median offset over the instruments both
-  measured (-3.92 dB, RMS 2.50 against 3.87 with no offset); SSO's Grand Piano (Direct) swept on the VM every 6 semitones
+  measured (-3.92 dB, RMS 2.50 against 3.87 with no offset), less 3.0 dB for one voice of the two; SSO's Grand Piano (Direct) swept on the VM every 6 semitones
   21 .. 105: **-1.11**, about ±3 dB. Celeste, glockenspiel, xylophone, marimba, vibraphone, crotales, tubular and desk
   bells (Iteration 12): no source of their level in an orchestra; the University of Iowa's recordings give only their
   pp / ff extremes (18 .. 39 dB, spread 4 .. 10 dB by pitch), not markings: they play SSO's own level and span.
 - The percussion section (Iteration 7): SSO's six-player group at mf against the string family lies within
   Skålevik 2019's -8 .. -2 dB by energy (-3.6 / -2.0, peak +1.8): no offset.
 - **In context** (since 2026-10-24, docs/BALANCE_LOG.md › Iteration 15; the owner, after checking 40 of the score
-  readings on the spot-check page, all right: "apply the full measured balance"): the flutes **+3.96**, oboes **-4.17**,
-  horns **-8.29** and trumpets **-4.59 dB** on top of the Clark & Luce level, every patch of the instrument (solo, a2, a6,
+  readings on the spot-check page, all right: "apply the full measured balance"; +3.96 / -4.17 / -8.29 / -4.59 until
+  2026-11-10, when a second review of 133 readings corrected one marking and left two spans out: docs/RESEARCH.md ›
+  1.5a): the flutes **+3.98**, oboes **-4.17**, horns **-8.30** and trumpets **-4.62 dB** on top of the Clark & Luce level, every patch of the instrument (solo, a2, a6,
   the Motif horns a4 and trumpets a3). The shift is how much louder (+) or softer (-) one player plays against the strings
   at the same written marking in real music than the map implies, the pooled value of two anechoic orchestra recordings:
   Aalto's (Beethoven 7, Bruckner 8, Mahler 1; one gain for every part) and TU Berlin's Beethoven 8 (calibrated; period
   instruments) (docs/RESEARCH.md › 1.5a; `anechoic_balance.json` -> `anechoic_shift.py` -> `sso_anechoic_shift.json` ->
   `gen_spitfire_sso.py` `ANECHOIC_SHIFT`). About ±3 dB each. Applied where both recordings measured the instrument, agree
-  in sign and each 90 % interval excludes 0; the clarinets (the datasets +2.7 / -0.8), bassoons (TU's interval includes 0),
-  trombones and tuba (Aalto only) and the strings (the centre) keep their Clark & Luce level. Piccolo, Alto Flute, Bass
+  in sign and each 90 % interval excludes 0; the clarinets (the datasets +2.8 / -0.8), bassoons (TU's interval includes 0),
+  trombones and tuba (Aalto only) and the strings (the centre) keep their Clark & Luce level. How firm each is: the
+  intervals resample part x marking values played by one or two players per recording, so they are narrower than two
+  recordings (n = 2) can support, and the criterion was chosen after the data were seen. A check: the same intervals for
+  the four string instruments, whose mean is the zero, exclude 0 in 3 of 8 cases (medians up to ±4.0 dB). The horns and
+  trumpets are clear in both recordings (-7.6 / -9.0 and -4.2 / -5.1 dB). The flutes and oboes are marginal: the flute's
+  Aalto value (+3.2) and the oboe's (-2.0) lie inside that scatter of the strings, and the oboe's recordings differ by
+  4.4 dB, more than the clarinet's 3.6, which was not applied. Piccolo, Alto Flute, Bass
   Flute take the flute's shift and Cor Anglais the oboe's: **an assumption** ("plays like its family"; neither recording
   has them). The harp's and the Grand Piano's offsets to this scale were left as they are (the harp's median over the
   solo winds would move -3.4 dB with the shifted winds, the piano's -0.1: BALANCE_LOG.md › Iteration 15).
-- Corroboration (one player against a string player, woodwind / brass, dB): Clark & Luce + directivity +2.6 .. +4.0 /
-  +11.3 .. +11.9 (pp .. mf; at ff -1.9 / +8.3); the Spheres dataset's whole sections +1.4 / +14.3 (its claps showed no
+- Corroboration (one player against a string player, woodwind / brass, dB): Clark & Luce + directivity +2.3 .. +4.2 /
+  +14.5 .. +14.8 (mf .. pp, since Iteration 8's directivity by marking: five solo woodwinds / four brass against the four
+  string instruments per player, the levels before the in-context shifts; at mp +2.9 / +14.6, as played with Iteration
+  15's shifts +2.0 / +11.4; at ff the woodwinds -2.4, the brass without the horn, which has no ff, +10.6); the Spheres dataset's whole sections +1.4 / +14.3 (its claps showed no
   gain change between sessions: +2.1 / +1.9 / +3.0 dB L / R / C, SD ~3.8, so the sessions stand as measured); Skålevik
   2019 (JASA 146, 2802, orchestra dosimetry fit; readings by eye ±0.5 dB, owner to review) +3.2 / +4.2 in average
   sessions, +4.2 / +12.2 in forte passages; `sectionLevel` (TU single notes at Meyer's mp) +11.9 / +18.9, the outlier.
 - Uncertainties: two players per instrument, who disagree by up to 10.0 (violin), 11.5 (horn) dB over the range (Clark
   & Luce Table III); absolute levels differ by up to 9.7 dB (horn) between them; directivity by marking since 2026-10-15 (TU's recordings, pp and ff: the brass 2-6.5 dB less directional at pp; docs/BALANCE_LOG.md › Iteration 8; before: ff only (brass
-  at pp may be 3-4 dB more directional); instrument families stand for each patch's instrument.
+  at pp may be 3-4 dB more directional); instrument families stand for each patch's instrument. No patch has its own
+  interval: the table below prints 0.01 dB so that the map can be reproduced, not as its precision. Half the two
+  players' difference in level is 0 .. 2 dB (their difference 0 .. 4.2 dB), for the tuba patches about ±4 and the horn's ±4 .. 5
+  (7.7 / 9.7 dB; Clark & Luce Table III, docs/BALANCE_LOG.md › Iterations 1 and 3), before the family assumptions and
+  the offsets' own uncertainty (harp ±4, timpani ±5, Grand Piano ±3, the in-context shifts ±3).
 
 | Patch | sectionLevel2 (dB, 2) | sectionLevel (dB, 1) | real Lw at mp (dB re 1 pW) |
 |---|---|---|---|
@@ -574,8 +594,8 @@ Where `sectionLevel2` comes from (`tools/soundlibraries/section_balance_cl.py` w
 | Violas | -7.08 | -3.08 | 86.1 |
 | Celli | +2.56 | +1.89 | 92.7 |
 | Basses | +3.43 | +5.24 | 90.9 |
-| Flute Solo | +1.96 (was -2.00; in context +3.96) | +7.39 | 81.9 |
-| Flutes a2 | -0.02 (was -3.98; in context +3.96) | +5.41 | 84.9 |
+| Flute Solo | +1.98 (was -2.00; in context +3.98) | +7.39 | 81.9 |
+| Flutes a2 | 0.00 (was -3.98; in context +3.98) | +5.41 | 84.9 |
 | Oboe Solo | -10.30 (was -6.13; in context -4.17) | +0.16 | 85.2 |
 | Oboes a2 | -13.12 (was -8.95; in context -4.17) | -2.65 | 88.2 |
 | Cor Anglais | -8.44 (was -4.27; in context -4.17, an assumption) | +3.98 | 81.4 |
@@ -585,12 +605,12 @@ Where `sectionLevel2` comes from (`tools/soundlibraries/section_balance_cl.py` w
 | Bassoon Solo | -15.04 | -2.80 | 81.2 |
 | Bassoons a2 | -2.63 | +9.61 | 84.2 |
 | Contrabassoon (TU ratio) | -14.43 | -3.00 | 76.7 |
-| Horn Solo | -7.83 (was +0.46; in context -8.29) | +3.86 | 94.8 |
-| Horns a2 | -1.62 (was +6.67; in context -8.29) | +10.07 | 97.8 |
-| Horns a6 | +2.18 (was +10.47; in context -8.29) | +13.87 | 102.5 |
-| Trumpet Solo | +4.63 (was +9.22; in context -4.59) | +9.00 | 96.6 |
-| Trumpets a2 | +9.20 (was +13.79; in context -4.59) | +13.57 | 99.6 |
-| Trumpets a6 | +15.85 (was +20.44; in context -4.59) | +19.65 | 104.4 |
+| Horn Solo | -7.84 (was +0.46; in context -8.30) | +3.86 | 94.8 |
+| Horns a2 | -1.63 (was +6.67; in context -8.30) | +10.07 | 97.8 |
+| Horns a6 | +2.17 (was +10.47; in context -8.30) | +13.87 | 102.5 |
+| Trumpet Solo | +4.60 (was +9.22; in context -4.62) | +9.00 | 96.6 |
+| Trumpets a2 | +9.17 (was +13.79; in context -4.62) | +13.57 | 99.6 |
+| Trumpets a6 | +15.82 (was +20.44; in context -4.62) | +19.65 | 104.4 |
 | Tenor Trombone Solo | -0.20 | +4.82 | 89.8 |
 | Tenor Trombones a2 | +6.17 | +11.19 | 92.8 |
 | Trombones a6 | +15.89 | +19.96 | 97.5 |
@@ -601,12 +621,12 @@ Where `sectionLevel2` comes from (`tools/soundlibraries/section_balance_cl.py` w
 | Solo Violin 2 | -0.23 | - | 77.9 |
 | Solo Viola | -3.92 | - | 75.3 |
 | Solo Cello | +3.09 | - | 82.7 |
-| Motif Horns a4 | +4.75 (was +13.04; in context -8.29) | - | 100.8 |
-| Motif Trumpets a3 | +9.12 (was +13.71; in context -4.59) | - | 101.4 |
+| Motif Horns a4 | +4.74 (was +13.04; in context -8.30) | - | 100.8 |
+| Motif Trumpets a3 | +9.09 (was +13.71; in context -4.62) | - | 101.4 |
 | Motif Trombones a5 | +8.17 | - | 96.8 |
-| Piccolo (flute) | -0.24 (was -4.20; in context +3.96, an assumption) | - | 81.9 |
-| Alto Flute (flute) | +6.07 (was +2.11; in context +3.96, an assumption) | - | 81.9 |
-| Bass Flute (flute) | +1.49 (was -2.47; in context +3.96, an assumption) | - | 81.9 |
+| Piccolo (flute) | -0.22 (was -4.20; in context +3.98, an assumption) | - | 81.9 |
+| Alto Flute (flute) | +6.09 (was +2.11; in context +3.98, an assumption) | - | 81.9 |
+| Bass Flute (flute) | +1.51 (was -2.47; in context +3.98, an assumption) | - | 81.9 |
 | Contrabass Clarinet (clarinet) | -0.21 | - | 82.0 |
 | Contrabass Trombone (trombone) | -1.93 | - | 89.8 |
 | Cimbasso Solo (trombone) | +4.77 | - | 89.8 |
@@ -666,7 +686,7 @@ Where M comes from (`tools/soundlibraries/section_balance_winds.py` -> `sso_wind
   (`sectionLevel2` only) likewise `sso_gap_cc1_semitone.json` (Solo Violin 2, which it lacks, from `sso_gap_cc1_curves.json`).
   Effect of the every-semitone wind and brass sweeps (2026-10-28, docs/BALANCE_LOG.md): 37 of 47 `sectionLevel2` and 23
   of 28 `sectionLevel` values change, at most 0.56 dB (Contrabass Clarinet / Contrabass Tuba `sectionLevel2` +0.56, Oboe
-  Solo `sectionLevel` +0.53), median 0.11 dB, inside the +-2 dB uncertainty; the five strings and the non-wind patches
+  Solo `sectionLevel` +0.53), median 0.11 dB, small against the players' difference (about ±2 dB, tuba and horn ±4 .. 5: above); the five strings and the non-wind patches
   are unchanged. The old files, passed to the two scripts, reproduce the earlier numbers exactly.
 - Per patch: the mean over every semitone of the Long's range that the database also measured of (SSO - real); M =
   minus that, centred over the five string sections (they add up to 0); the winds on the strings' scale, not re-centred,
@@ -736,7 +756,9 @@ and the patches' volumes; CC1 stays MuseScore's (the written dynamic).
   data wherever it's reliable", then one source for every instrument, not mixed): each written marking is one equal step
   of S / 5 from mp, S the instrument's written pp -> ff as orchestral players play it, whatever its single-note span:
   pp = mp - 2S/5 … ff = mp + 3S/5, ppp / fff one step more (-3S/5, +4S/5), linear in CC1 between (continuous through
-  hairpins); less SSO's Long's own change with CC1 as below. S from M. Clark, D. Luce, "Intensities of Orchestral
+  hairpins); less SSO's Long's own change with CC1 as below. The equal steps are an assumption: Clark & Luce's own played
+  pp / mf / ff (Fig. 2) lie up to 2.4 dB off them (the violin's ff +2.4, the trumpet's pp -1.4; the horn aside, below),
+  and S, from two players, has no interval. S from M. Clark, D. Luce, "Intensities of Orchestral
   Instrument Scales Played at Prescribed Dynamic Markings", *J. Audio Eng. Soc.* 13(2), 1965, 151-157, Table I
   "Dynamic Range" (printed numbers: two players per instrument, chromatic scales at pp, mf and ff as they would play those
   markings in orchestral music, anechoic, the average ff scale less the average pp scale). Meyer's in-play pp / ff (the
@@ -755,18 +777,18 @@ and the patches' volumes; CC1 stays MuseScore's (the written dynamic).
   | English horn (Cor Anglais) | 5.2 | |
   | clarinet (Clarinet Solo, Clarinets a2; Bass Clarinet, Contrabass Clarinet: family) | 8.3 | |
   | bassoon (Bassoon Solo, Bassoons a2; Contrabassoon: family) | 10.2 | |
-  | horn (Horn Solo, Horns a2, a6, Motif Horns a4) | 17.7 | |
+  | horn (Horn Solo, Horns a2, a6, Motif Horns a4) | 17.7 (as printed, but it mixes the players: the ff scale is player 2's alone, the pp both; player 1's pp -> mf implies 17.8, player 2's pp -> ff 23.6: one player each way, several dB uncertain) | |
   | trumpet (Trumpet Solo, Trumpets a2, a6, Motif Trumpets a3) | 8.8 | Trumpet 10.6 |
   | trombone (Tenor Trombone Solo, a2, Trombones a6, Motif Trombones a5; Bass Trombone Solo, a2, Contrabass Trombone, Cimbasso Solo, Cimbassi a2: family) | 17.0 | Trombone 14.3 |
   | tuba (Tuba Solo; Contrabass Tuba: family) | 12.5 | |
-  | timpani (Timpani; the Spheres dataset's Romeo and Juliet, f - p 26.3 dB over 3 steps; velocity patch: by CC11, SSO's own velocity curve the longLevel per written pitch) | 43.8 | (is the source) |
+  | timpani (Timpani; the Spheres dataset's Romeo and Juliet, f - p 26.3 dB over 3 steps; velocity patch: by CC11, SSO's own velocity curve the longLevel per written pitch) | 43.8 (one player, 11 f hits against fast p triplets; TU Berlin's unlabelled series would give 35 .. 41) | (is the source) |
 
   *Family* is an assumption, not a measurement ("plays like its family"). The cross-check: the Spheres dataset (Colibrì
   Ensemble, Pescara; arXiv 2511.21247, Zenodo 17347681, CC BY-SA 4.0), each section of a chamber orchestra recorded alone
   playing chromatic scales in a studio; a section's loudest less its quietest full scale (median note level at the main
   pair), only where its recording has 3 or more section scales; the dynamics are not labelled in the dataset (two-scale
-  sections' spans may not reach pp / ff and are not used). Where it has them it agrees with Clark & Luce within 2.7 dB (the trombone; audit 2026-11-01):
-  independent support, not used in the map (one source for every instrument). Since 2026-10-15 (docs/BALANCE_LOG.md ›
+  sections' spans may not reach pp / ff and are not used). Where it has them, 4 of the 13 instruments, it lies within 2.7 dB of Clark & Luce (the trombone; the trumpet's 10.6 against 8.8 is 20 % off; audit 2026-11-01):
+  consistent with it, not a confirmation, and not used in the map (one source for every instrument). Since 2026-10-15 (docs/BALANCE_LOG.md ›
   Iteration 4) the 15 patches without a section level before also have a real range: their Long swept the same way
   (`sso_gap_cc1_curves.json`); the solo strings and the Motif patches with their database instrument's realSpan (both
   rules), the eight family patches (Piccolo, Alto / Bass Flute, Contrabass Clarinet, Contrabass Trombone, Cimbasso Solo /
@@ -1216,7 +1238,7 @@ gain is applied moved (`libmscore/contextlevel.h` › Gain stage and master trim
   crest="14.515">`): a note's sample peak over its loudest 50 ms, measured 2026-10-12 on the Windows test VM (real
   Kontakt 8 + SSO, kthost, offline, 44.1 kHz; branch utility-headroom's measurement): the five string sections' All
   techniques Long and played velocity techniques and their Performance Legato, velocity = CC1 = 32 / 64 / 96 / 127, two
-  repeats, 392 notes: median 8.97 dB, largest 14.515 dB (Basses Pizzicato Bartok), the one used. Against the
+  repeats, 392 notes: median 8.97 dB, largest 14.515 dB (Basses Pizzicato Bartok), the one used (this sample's maximum, not a bound). Against the
   calibration's level instead of the note's own (round robins differ), the same notes' peaks lie up to 20.2 dB over it
   (median 9.1; the largest a pp Violins 1 pizzicato): the trim can be ~6 dB short on a single soft note's odd take, never
   near the loud moments that set it. Woodwinds, brass and percussion not measured (an assumption: the strings' crest).
@@ -2017,7 +2039,7 @@ reads the accent and the plain choice's base "long" is no velocity technique, so
 ### Level of the accented attack (2026-10-21, branch accent-level)
 
 - **The target, real players**: an sf at f plays **+5.0 dB** over the unaccented notes around it in the same part (the
-  five sections' mean, 90 % [+3.8, +6.0]; the sections +4.1 .. +5.5, within one instance's noise, so one pooled value),
+  five sections' mean, 90 % [+3.8, +6.0] within this one recording; the sections +4.1 .. +5.5, within one instance's noise, so one pooled value),
   the Spheres dataset's Mozart K. 550 (Colibri Ensemble, arXiv 2511.21247, CC BY-SA 4.0), each section's close stem, the
   perceived peak in the 0.4 s after the onset (the fork's perceived envelope), 34 instances; readings approved by the owner
   2026-10-21. `MidiRenderer::PLAIN_ACCENT_DB` (rendermidi.h). **An assumption**: K. 550's strings have only sf, no ">" or
@@ -2055,7 +2077,9 @@ reads the accent and the plain choice's base "long" is no velocity technique, so
   little (86 against 35: +0.3 .. +0.5 dB at 150 ms, 1.3 at 211); Violas' 63 itself is one of the keys where the accented
   attack is weakest. Celli (60: +6.4 at 150, +1.7 at 211) and Basses alike; Violins 1's 84 at 211 ms is still +7.5, as
   Whence measured.
-- **Uncertainty**: the real side ±1.1 dB (90 %) plus the sf-for-">" assumption; SSO's side: the rounds within 0.4 dB, the
+- **Uncertainty**: the real side ±1.1 dB (90 %) within this one recording (one ensemble, one piece; its 34 instances are
+  at most 8 events heard in five sections, which are not independent; no spread between ensembles was measured) plus the
+  sf-for-">" assumption; SSO's side: the rounds within 0.4 dB, the
   listening level (the perceived measure's level dependence, about 1 dB between 35 and 59 units; the owner's monitoring
   level is unknown), the note's length as estimated (10 % off: about 0.5-1 dB on the steepest keys); for notes from 0.45 s
   on the measure is the first 0.4 s, as the real side's.
@@ -2133,7 +2157,7 @@ researched separately). Header comment of `libmscore/leadinglane.h` has the desi
 - **`[levels] leading`** (1 by default and in Recommended, 0 in Library default since 2026-11-06; per score): 1 plays every library note of the part starting
   while the lane is On **L dB louder**. L: the patch's map value `<Instrument leadingLevel>` (none in any shipped map
   yet), else **`[levels] leadingDb`** (default 3.5 dB since 2026-11-06, the owner: "let's do the simple 3.5 dB now, we'll refine as we go": a measured lead,
-  not yet multi-source, the median leading-line lift in 9 passages from 2 ensembles (Spheres K. 550 / Colibri Ensemble,
+  not yet multi-source, the median leading-line lift of 7 designs from 9 passages of 2 ensembles, about 3 independent groups (Spheres K. 550 / Colibri Ensemble,
   TU Berlin anechoic Beethoven 8), honest 90 % range about 1-6 dB, 1-3 dB of it possibly articulation rather than
   level; private research notes leading-lift/ and AUDIT.md). How: the patch's gain stage carries L (`TrackDelays::Delays::leading`, `gainStageDb`: hosted the slot's
   gain, Live MuseScore's Utility, MIDI out CC7), every note of the patch plays L lower by CC11 and a leading note at 0
@@ -2155,9 +2179,11 @@ default too), as a hairpin is.
 - **The marks**: a phrase mark (Inspector › Slur › *Phrase mark* ticked) gets two rows, **Amount** (0.0 … 12.0 dB, one
   decimal; 0: no swell) and **Peak** (Auto, 0 … 100 %; enabled only when Amount is above 0), shown only while *Phrase
   mark* is ticked. A slur made a phrase mark (the Inspector's tick, the context menu, Alt+S, Add › Lines › Phrase mark)
-  starts at **Amount 3.3 dB** (`PhraseMark::DEFAULT_AMOUNT`: a phrase's peak above its ends, the per-piece median of 43
-  Chopin mazurkas, MazurkaBL, 129 pianists, IQR 1.5-5.1; Vienna 4x22 3.3 / 4.5 dB; **piano only**, an assumption for
-  other instruments) and Peak Auto, unless it already has an amount (`Slur::undoChangeProperty`, the same undo step);
+  starts at **Amount 3.3 dB** (`PhraseMark::DEFAULT_AMOUNT`, a rough lead: the loudest bar above the mean of the two end bars
+  on a fixed 8-bar grid, not annotated phrases, in loudness (phon), the per-piece median of 43 Chopin mazurkas, MazurkaBL,
+  129 pianists, IQR 1.5-5.1, phrases with a dynamic mark included (the unmarked ones 2.6; the same grid shifted by 1-4
+  bars still gives 1.2-2.1); measured by bar means, a triangular swell of Amount A would give 0.75 A; Vienna 4x22 3.3 /
+  4.5 dB; **piano only**, an assumption for other instruments) and Peak Auto, unless it already has an amount (`Slur::undoChangeProperty`, the same undo step);
   the Amount row's reset button sets 3.3. Undoable (`Pid::PHRASE_AMOUNT`, `PHRASE_PEAK`, on the slur so its linked
   copies follow), kept by copy / paste (the clipboard's XML: `<phraseAmount>`, `<phrasePeak>`), saved in the phrase
   mark's entry of the metaTag `phraseMarks` as `"amount"` (dB, left out when 0) and `"peak"` (left out when Auto); a
@@ -2370,9 +2396,12 @@ https://claude.ai/artifact/GNwFDt1PcNHJ1UWoWugvDc, R01-R05, R12-R17, R19-R24 rig
 measurements resting on confirmed readings set the values).
 
 **Why.** MuseScore 4 holds a staccato for 50 % of its written length (staccatissimo 25 %) at every tempo, and the library
-chooses a short by that meant length (`[shorts] byMeantLength`, `from`). Real players sound a staccato for about a fixed time
-instead (RESEARCH.md 2.5a, `tools/soundlibraries/staccato_lengths.json`): winds about 0.10-0.16 s, strings about 0.15-0.22 s
-to -20 dB under the note's peak, whether the note is written 0.2 or 0.36 s long. So a slow staccato plays much longer in
+chooses a short by that meant length (`[shorts] byMeantLength`, `from`). In the recordings measured (RESEARCH.md 2.5a,
+`tools/soundlibraries/staccato_lengths.json`) players sound a staccato for winds about 0.10-0.16 s (notes written 0.35-0.365 s),
+strings about 0.15-0.22 s (written 0.20 and 0.305 s) to -20 dB under the note's peak. **Measured only for notes written
+0.15-0.37 s**: that a longer staccato stays this short is an assumption (no slow staccato was measured; the violins' 0.155 s
+at 0.20 s and 0.22 s at 0.305 s are 0.77 / 0.72 of the written length, which fits a fixed share as well as a fixed time),
+and the cap only changes notes longer than those measured. On that assumption a slow staccato plays much longer in
 MuseScore than with players: a Violins 1 staccato quarter at 60 bpm is meant to sound 0.5 s and chooses Short 0.5.
 
 **1.** A library note with a staccato (staccatissimo; not a portato) on a patch with `<Instrument staccatoLength>`
@@ -2389,7 +2418,7 @@ hold the same note-off (`tst_liveequivalence::staccatoLengthLive`).
 
 | family | staccato | staccatissimo | source |
 |---|---|---|---|
-| Violins 1 / 2, solo violins, Strings Ensemble | 0.19 | 0.16 | mean of TU Beethoven 8 / IV Violin I (≥ 0.155) and Spheres K. 550 Violins 1 (0.22) |
+| Violins 1 / 2, solo violins, Strings Ensemble | 0.19 | 0.16 | mean of TU Beethoven 8 / IV Violin I (≥ 0.155: 40 % of its notes reach the next before -20 dB) and Spheres K. 550 Violins 1 (0.22): a lower bound, strings ≥ 0.19 |
 | Violas, Solo Viola | 0.19 | 0.16 | the violins' (assumption: not measured) |
 | Celli, Basses, Solo Cello | 0.22 | 0.16 | the larger violin value (assumption: their staccato eighths never part by 20 dB; low strings ring longer) |
 | Oboe, cor anglais | 0.115 | 0.115 | TU Beethoven 8 / II staccato sixteenths, bars 1-2 at pp (confirmed readings): one oboist, 15 notes, 90 % [0.115, 0.125] |
@@ -2400,7 +2429,7 @@ hold the same note-off (`tst_liveequivalence::staccatoLengthLive`).
 | Trumpets, trombones, cimbassi, tubas | 0.16 | 0.16 | the horn's (assumption: no other brass measured) |
 
 Staccatissimo: 0.16 s (Hähnel & Berndt 2010, 161 ms over strings, winds and brass; no staccatissimo in the recordings: the one
-value from the literature, an assumption), never longer than the staccato. The winds' values are measured at pp only (in the
+value from the literature, an assumption), never longer than the staccato. The winds' values are measured at pp only, in one piece, one or two period-instrument players a part (in the
 unconfirmed bars 18-22, cresc. to f, 10-30 ms longer); Hähnel & Berndt's staccato, 173 ms (to a 66 % loudness drop), is a
 cross-check only. Percussion, harp, keyboards: none (as MuseScore 4).
 
@@ -2468,7 +2497,7 @@ keyLevels="pitch:dB …">` on each patch's Long, UACC 1): per patch a key's devi
 median of 4 takes = SSO's two round robins' mean) less the Theil-Sen line (median slope, robust to a zone of outliers)
 through the 8 nearest other keys, at the key. **Threshold T = 1.5 dB**: the 80th percentile of |d| by the same estimator over
 the TU Berlin database's ff tones (Weinzierl et al. 2018; the twelve wind and brass instruments of `real_range.py` WINDS,
-478 keys: robust SD 1.08, rms 1.33, p80 1.47, p90 2.02 dB); one take a pitch, so take noise is in it: an upper bound of real
+478 keys: robust SD 1.08, rms 1.33, p80 1.47, p90 2.02 dB; taking p80 is a choice, p90 would give 2.0); one take a pitch, so take noise is in it: an upper bound of real
 key-to-key structure. Not the pp tones ("as softly as possible": clarinet 6.7 dB rms, near the player's limit). The key
 plays c = -sign(d) max(0, |d| - T) dB more: only the part beyond real players' scatter is taken away (a key 6.6 dB under
 the line plays 1.5 under it; one 1 dB off stays). 34 patches, 4-22 keys each; rms deviation 1.0-3.8 dB before, 0.8-1.3

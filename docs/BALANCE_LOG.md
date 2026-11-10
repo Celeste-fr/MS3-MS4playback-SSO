@@ -512,6 +512,41 @@ max(0, peak); `tst_liveequivalence::dumpEvents` gains.txt, the shipped calibrati
 flute at 1.92 - 9.86 = -7.94); `tst_liveequivalence` 80 passed, 3 skipped; `tools/run_fork_tests.sh` all passed (Node and
 Python too); `check_windows_names` none. Unheard: the owner has not listened to it; nothing ran on the VM.
 
+## Iteration 16 (2026-11-10): the readings' second review, and how firm Iteration 15's shifts are
+
+**Weakest link.** Iteration 15's readings had a spot check of 40; its four shifts were stated as "each 90 % interval
+excludes 0" without saying what the intervals can carry.
+
+**What was done.**
+- A second review by the owner of 133 readings next to crops of the scores, with planted errors: one marking on the wrong
+  staff (Bruckner 8 II bar 41, the violas' f also read for the celli and basses: removed), two unresolved (Mahler 1 IV,
+  the trombones in bars 9-10 and 73-78: left out, row type `exclude` in `anechoic_balance/balance.py`), 60 of 60 controls
+  right, 3 of 3 planted marking errors caught; bar and beat positions were not reviewed (a planted wrong bar number
+  passed). The published analysis was reproduced bit for bit from the old readings first, then re-run.
+- A statistics audit of the documentation (2026-11-10). On the shifts: the intervals resample part x marking values of one
+  or two players per recording, so with two recordings they are too narrow; the criterion was chosen after the data were
+  seen; the same intervals for the four string instruments, whose mean is the zero, exclude 0 in 3 of 8 cases (medians
+  up to ±4.0 dB). The horns and trumpets are clear in both recordings; the flutes and oboes are marginal (the flute's Aalto
+  +3.2 and the oboe's -2.0 lie inside the strings' scatter; the oboe's recordings differ by 4.4 dB, the unapplied
+  clarinet's by 3.6).
+
+| instrument | Aalto | TU B8 | pooled (dB) | was |
+|---|---|---|---|---|
+| flute | +3.21 [+1.36, +6.55] | +4.76 [+3.89, +6.95] | +3.98 | +3.96 |
+| oboe | -1.98 [-2.81, -0.57] | -6.37 [-7.12, -3.67] | -4.17 | -4.17 |
+| horn | -7.58 [-8.04, -6.67] | -9.03 [-12.07, -6.71] | -8.30 | -8.29 |
+| trumpet | -4.17 [-5.39, -0.55] | -5.06 [-6.53, -4.33] | -4.62 | -4.59 |
+
+**Decision.** The corrected readings' values go into the map as measured (`anechoic_shift.py`'s rule still selects the
+owner's four); nothing else changes. Whether the marginal flute and oboe shifts stay applied is the owner's to decide:
+they stay as he approved them.
+
+**Before -> after** (`sectionLevel2`, dB): Flute Solo +1.96 -> +1.98, Flutes a2 -0.02 -> 0.00, Piccolo -0.24 -> -0.22,
+Alto Flute +6.07 -> +6.09, Bass Flute +1.49 -> +1.51, Horn Solo -7.83 -> -7.84, Horns a2 -1.62 -> -1.63, Horns a6 +2.18 ->
++2.17, Motif Horns a4 +4.75 -> +4.74, Trumpet Solo +4.63 -> +4.60, Trumpets a2 +9.20 -> +9.17, Trumpets a6 +15.85 ->
++15.82, Motif Trumpets a3 +9.12 -> +9.09; the map's other values byte for byte. The Vial maps were not refitted (their
+flute and trumpet keep the level fitted to the old values, 0.02-0.03 dB off). Linux only, a recomputation: nothing heard.
+
 ## Mic levels for the added patches (2026-10-15)
 
 The mic-compensation work (`[levels] micCompensation`) measured each mic alone for the 28 patches that had a section

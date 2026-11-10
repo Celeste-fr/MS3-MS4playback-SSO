@@ -504,7 +504,7 @@ identical (OVERLAP 0, UNMEASURED 0, CAPPED 0, ARRIVAL 12 fail, LEVEL STEP 12 inf
 
 The owner checked the score readings' spot-check page (40 of 40 right) and chose "apply the full measured balance"
 (docs/RESEARCH.md › 1.5a). `sectionLevel2` (`[levels] sectionBalance` 2, Recommended and the default): flutes +3.96,
-oboes -4.17, horns -8.29, trumpets -4.59 dB on every patch of the instrument, piccolo / alto / bass flute and cor anglais
+oboes -4.17, horns -8.29, trumpets -4.59 dB (since the readings' second review, 2026-11-10: +3.98 / -4.17 / -8.30 / -4.62) on every patch of the instrument, piccolo / alto / bass flute and cor anglais
 by their family (an assumption); new step `tools/soundlibraries/anechoic_shift.py` -> `sso_anechoic_shift.json`, read by
 `gen_spitfire_sso.py` (`ANECHOIC_SHIFT`); the map's diff is those 16 attributes. Per-patch table, the master trim and the
 tests: docs/BALANCE_LOG.md › Iteration 15. Open:

@@ -427,7 +427,7 @@ sf.
 
 | case | level over the neighbours | interval |
 |---|---|---|
-| sf at f | +5.0 dB | 90 % [+3.8, +6.0] |
+| sf at f | +5.0 dB | 90 % [+3.8, +6.0] within this one recording (one ensemble, one piece; no spread between ensembles measured) |
 | sf at p | +10.3 dB | an sf inside p plays near f: a change of level |
 | mfp at p | +1.7 dB | |
 
@@ -731,6 +731,17 @@ by up to 0.8 / 0.9 / 1.1 / 0.6 dB (90th percentile, a marking taken from another
 readings rule, a review page with crops is needed before any of this changes the map.) Dropping the "uncertain" segments changes no instrument by more than 0.4 dB except
 trombone / tuba (see Sensitivity).
 
+**Second review by the owner, 2026-11-10**: 133 readings, each next to a crop of the score, mixed with planted errors.
+One marking was on the wrong staff (Bruckner 8 II bar 41: the f between the viola and the cello / bass staves is the
+violas', and was also read for the celli and basses: removed). Two readings stay unresolved (Mahler 1 IV, which trombone
+plays in bars 9-10 and 73-78: those spans are left out, row type `exclude`). 60 of 60 controls were right and 3 of 3
+planted marking errors were caught; a planted wrong bar number passed, as the owner did not review bar and beat
+positions. Re-run with the corrected readings (`anechoic_balance.json`, `sso_anechoic_shift.json`): flute +3.96 ->
++3.98, oboe -4.17 unchanged, horn -8.29 -> -8.30, trumpet -4.59 -> -4.62, the instruments not applied by at most 0.07 dB
+(the basses); the trombone's interval [-3.4, +2.7] -> [-4.2, +2.6]. `sectionLevel2` moves by 0.01-0.03 dB on the 13
+flute, horn and trumpet patches. The tables below are the first measurement's: apart from that interval no value in them moves by more than 0.16 dB
+(the cello's Aalto interval; the double bass's Aalto median +2.94 -> +3.06).
+
 **Method** (`anechoic_balance/`: envelope.py, tu_envelope.py, dir_at.py, balance.py, align_dtw.py, compare.py,
 summarize.py, make_json.py)
 1. **Envelope and activity.** A 50 ms mean-square envelope after a 40 Hz high pass. A frame counts as active when it is
@@ -808,7 +819,13 @@ The "±" combines:
 
 **Applied 2026-10-24** (the owner: "apply the full measured balance"; docs/BALANCE_LOG.md › Iteration 15): the pooled
 values unrounded, flutes +3.96, oboes -4.17, horns -8.29, trumpets -4.59 dB on `sectionLevel2`, by `anechoic_shift.py`
-(applied where both datasets measured the instrument, agree in sign and each 90 % interval excludes 0). The proposal
+(applied where both datasets measured the instrument, agree in sign and each 90 % interval excludes 0); since the second
+review, 2026-11-10: +3.98 / -4.17 / -8.30 / -4.62. How firm (statistics audit, 2026-11-10): the intervals resample
+part x marking values from one or two players per dataset, so with n = 2 datasets they are too narrow, and the criterion
+was chosen after the data were seen. The same intervals for the four string instruments, whose mean is the zero, exclude
+0 in 3 of 8 cases (medians up to ±4.0 dB). Horns and trumpets are clear in both datasets; flutes and oboes are marginal
+(the flute's Aalto +3.2 and the oboe's -2.0 lie inside the strings' scatter; the oboe's datasets differ by 4.4 dB, more
+than the clarinet's 3.6, which was not applied). The proposal
 as written before:
 
 **What it implies for the map** (a proposal at the time; the owner decided as above)
@@ -1261,8 +1278,12 @@ Not measured:
 - The historical rule (C.P.E. Bach, Quantz) is "less than half the value", a convention.
 
 **What it says**
-1. **Staccato length is closer to a fixed time than to a fixed share.**
-   - Winds at IOI 355 ms sound 95–170 ms to −20 dB (0.26–0.48); strings at 200–305 ms sound 150–220 ms.
+1. **Staccato length is closer to a fixed time than to a fixed share**, within the range measured: every staccato here
+   is written 145–365 ms long, so whether a longer one stays this short is not measured (an assumption where
+   `[shorts] staccatoLength` caps slow staccatos).
+   - Winds at IOI 355 ms sound 95–170 ms to −20 dB (0.26–0.48); strings at 200–305 ms sound 150–220 ms. The violins'
+     155 ms at 200 and 220 ms at 305 are 0.77 / 0.72 of the written length: a fixed share fits them as well. The winds:
+     pp, one piece, one or two period-instrument players a part.
    - This agrees with Hähnel & Berndt's 173 ms and the clarinettists' 166–304 ms.
    - As a share it runs from about 0.3 (slow) to "joined" (fast): at 150 ms IOI a section's staccato eighths dip only
      ~11 dB between notes.

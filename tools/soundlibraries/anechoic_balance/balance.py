@@ -46,9 +46,9 @@ def read(path, beats, endPad=0.0):
         c = line.rstrip('\n').split('\t')
         c += [''] * (6 - len(c))
         part, typ, a, b, val, com = [x.strip() for x in c[:6]]
-        if typ not in ('notes', 'dyn', 'accent', 'cresc', 'dim', 'text'):
+        if typ not in ('notes', 'dyn', 'accent', 'cresc', 'dim', 'text', 'exclude'):
             continue
-        p = parts.setdefault(part, {'notes': [], 'dyn': [], 'accent': [], 'change': [], 'text': [], 'uncertain': []})
+        p = parts.setdefault(part, {'notes': [], 'dyn': [], 'accent': [], 'change': [], 'text': [], 'uncertain': [], 'exclude': []})
         try:
             pa = pos(a, beats)
             pb = pos(b, beats) if b else None
@@ -56,7 +56,9 @@ def read(path, beats, endPad=0.0):
             continue
         if 'uncertain' in com.lower():
             p['uncertain'].append((pa, typ, val))
-        if typ == 'notes':
+        if typ == 'exclude':     # an unresolved reading (the owner's review): the span is left out of every segment
+            p['exclude'].append((pa, pb if pb is not None else pa))
+        elif typ == 'notes':
             # a span ends at the end of its last note: "end" given as that note's bar:beat start; allow one beat
             p['notes'].append((pa, (pb + endPad) if pb is not None else pa + 1.0 / beats(float(a.split(':')[0]))))
         elif typ == 'dyn':
@@ -246,6 +248,8 @@ def run(cfg):
                     sel &= ~((posn >= c0 - trim) & (posn < c1 + trim))
                 for c0, c1 in technique_spans(P):
                     sel &= ~((posn >= c0 - 0.05) & (posn < c1))
+                for c0, c1 in P['exclude']:
+                    sel &= ~((posn >= c0 - 1e-6) & (posn < c1 + trim))
                 for x in P['accent']:
                     sel &= ~((posn >= x - cfg.get('accentBefore', 0.05)) & (posn < x + cfg.get('accentAfter', 0.25)))
                 lv, nfr = [], []

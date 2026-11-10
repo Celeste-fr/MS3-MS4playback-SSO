@@ -1,7 +1,8 @@
-"""make_json.py <out anechoic_balance.json>: the committed result (derived numbers only, no audio)"""
+"""make_json.py <out anechoic_balance.json>: the committed result (derived numbers only, no audio)
+ANECHOIC_WORK=<dir>: the folder with cmp_all.json, summary*.json and directivity.json (default: the private work folder)"""
 import sys, json, os, math
 R = os.path.expanduser('~/MuseScore/ms3fork/private/research-balance')
-W = R + '/work/'
+W = os.environ.get('ANECHOIC_WORK', R + '/work') + '/'
 cmp_ = json.load(open(W + 'cmp_all.json'))
 summ = json.load(open(W + 'summary.json'))
 var = {k: json.load(open(W + 'summary_%s.json' % k)) for k in ('dbmean', 'nounc', 'nomahler', 'mic6')}
@@ -51,7 +52,11 @@ out = {
                        'Classic_bassoon, Natural_horn, Natural_trumpet).'},
     'method': [
         'Score readings (bar:beat dynamics, hairpins, cresc./dim., accents, technique texts, notes spans per player) by agents from '
-        'public-domain scores: anechoic_balance/readings/*.tsv. NOT YET REVIEWED BY THE OWNER (readings rule).',
+        'public-domain scores: anechoic_balance/readings/*.tsv. Spot-checked by the owner 2026-10-24 (0 errors in 40 sampled readings; '
+        'that still allows up to ~7 % wrong); a second review, 2026-11-10, of 133 readings: one marking on the wrong staff (Bruckner 8 II '
+        'bar 41, the violas\' f read for the celli and basses too: removed), two unresolved (Mahler 1 IV, trombones: their spans left out, '
+        'row type "exclude"), 60 of 60 controls right, 3 of 3 planted marking errors caught; bar and beat positions not reviewed by the '
+        'owner; not every reading reviewed.',
         'Envelope: 50 ms mean square after a 40 Hz high pass; a frame is active when over the track noise (5th percentile) + 10 dB and '
         'within 30 dB of its 99th percentile.',
         'Steady segment: where the part plays, one written marking, more than 0.25 bar (TU / Mahler 0.4) inside the segment\'s ends, '
