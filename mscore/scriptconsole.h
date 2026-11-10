@@ -272,7 +272,6 @@ class ScriptConsole : public QDockWidget {
       void focusInput();
       void writeSettings();
       static QString scriptsFolder();           // the Scripts folder of Preferences › General (Documents/<app>/Scripts)
-      static QString legacyScriptsFolder();     // <data folder>/scripts of the first build: read as a fallback, never moved
       static QString scriptFile(const QString& name);     // an existing script's file (new folder first, then the old), else where it is saved
       };
 

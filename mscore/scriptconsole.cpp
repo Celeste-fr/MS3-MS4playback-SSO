@@ -609,16 +609,9 @@ QString ScriptConsole::scriptsFolder()
       return f.absoluteFilePath();
       }
 
-QString ScriptConsole::legacyScriptsFolder()
-      {
-      return dataPath + "/scripts";
-      }
-
 QString ScriptConsole::scriptFile(const QString& name)
       {
-      const QString now = scriptsFolder() + "/" + name + ".lua";
-      const QString old = legacyScriptsFolder() + "/" + name + ".lua";
-      return !QFile::exists(now) && QFile::exists(old) ? old : now;
+      return scriptsFolder() + "/" + name + ".lua";
       }
 
 ScriptConsole::ScriptConsole(QWidget* parent)
@@ -1148,10 +1141,8 @@ void ScriptConsole::refreshList(const QString& select)
       _loading = true;
       _list->clear();
             QStringList names;
-      for (const QString& folder : { scriptsFolder(), legacyScriptsFolder() })        // (the first build's folder too, read only)
-            for (const QString& f : QDir(folder).entryList({ "*.lua" }, QDir::Files, QDir::Name | QDir::IgnoreCase))
-                  if (!names.contains(f.left(f.size() - 4), Qt::CaseSensitive))
-                        names << f.left(f.size() - 4);
+      for (const QString& f : QDir(scriptsFolder()).entryList({ "*.lua" }, QDir::Files, QDir::Name | QDir::IgnoreCase))
+            names << f.left(f.size() - 4);
       names.sort(Qt::CaseInsensitive);
       _list->addItems(names);
       _loading = false;
@@ -1234,7 +1225,7 @@ void ScriptConsole::deleteScript()
       if (QMessageBox::question(this, tr("Delete Script"), tr("Delete the script \"%1\"?").arg(name),
                                 QMessageBox::Yes | QMessageBox::No, QMessageBox::No) != QMessageBox::Yes)
             return;
-      QFile::remove(scriptsFolder() + "/" + name + ".lua");      // (a script only in the first build's folder is left there: nothing of the user's is deleted outside the Scripts folder)
+      QFile::remove(scriptFile(name));
       if (name == _currentScript) {
             _currentScript.clear();
             _loading = true;

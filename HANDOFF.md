@@ -148,7 +148,7 @@ Decisions taken here that the owner may want to change
   mark (the note is in it / has one).
 - A failed script changes nothing (the undo step is rolled back). `--lua` without `-o` writes nothing.
 - Phrase marks don't count as slurs. sf / sfz / rfz leave the dynamic in force as it was; fp, sfp leave p.
-- Scripts are saved in the Scripts folder (owner 2026-11-10: `Documents/MuseScore3Evo/Scripts`, a Preferences › General row beside Plugins / Styles, `PREF_APP_PATHS_MYSCRIPTS`, created at start like the others; `<dataPath>/scripts` of the first build still read, nothing moved) as `<name>.lua`; numbered names (violas1) are offered in completion only for a section of two or more parts, accepted when typed; the console is created when first shown (so a saved window
+- Scripts are saved in the Scripts folder (owner 2026-11-10: `Documents/MuseScore3Evo/Scripts`, a Preferences › General row beside Plugins / Styles, `PREF_APP_PATHS_MYSCRIPTS`, created at start like the others) as `<name>.lua`; numbered names (violas1) are offered in completion only for a section of two or more parts, accepted when typed; the console is created when first shown (so a saved window
   layout doesn't restore it before that).
 
 Untested / open (fill in as they are tried)
