@@ -135,6 +135,7 @@ struct PartNote {
       int hand;                     // the staff of the part it is shown on (cross-staff moves followed): 0 upper
       bool attack;                  // not tied from before
       int own;                      // the staff it is written on (a hand text, L.H. / R.H., sets both)
+      bool pinned;                  // a hand text gives it to that hand (K1 keeps it there)
       };
 
 struct PartMoment {
@@ -692,7 +693,8 @@ static bool isHarmonicCircle(SymId id)
 //---------------------------------------------------------
 //   handle
 //    one chord (ordinary or grace): harmonics first (never a double stop), then a single note on
-//    an open string, then a multiple stop unless div. is in force
+//    an open string, then a multiple stop unless div. is in force. Invisible notes are left out (a
+//    hidden helper note is not played); so are they in partMoments, checkTremolos and R6.
 //---------------------------------------------------------
 
 // noRed: 1 "div." in a part named as one player, 2 a section's chord with neither "div." nor "non div.":
@@ -710,6 +712,8 @@ void Pass::handle(Chord* chord, int grace, const QString& staffName, const Strin
                   chordCircle = true;
       bool anyD = false, anyC = chordCircle;
       for (Note* n : chord->notes()) {
+            if (!n->visible())
+                  continue;               // a hidden helper note (e.g. one giving a trill its accidental): not played
             bool d = n->headGroup() == NoteHead::Group::HEAD_DIAMOND;
             bool c = chordCircle;
             for (const Element* e : n->el())
@@ -935,12 +939,40 @@ void Pass::checkSlurs(int st, Part* part, const QString& staffName, const StaffT
 
 //---------------------------------------------------------
 //   checkTremolos (S13)
-//    every "between notes" tremolo: its chord and the next in the voice; single notes only, no
-//    harmonics
+//    every unmeasured "between notes" tremolo: its chord and the next in the voice; single notes only
+//    (visible ones), no harmonics. A measured one (one or two strokes: eighths or sixteenths) is a
+//    written-out alternation, not judged as a fingered tremolo: three strokes are the unmeasured sign
+//    (Forsyth p. 357; Kennan & Grantham p. 60), the fingered tremolo is usually unmeasured (Kennan &
+//    Grantham p. 62), and no rule gives the pace at which a measured one becomes a tremolo (Forsyth
+//    p. 350). Never red (fingeredTremolo).
 //---------------------------------------------------------
+
+// where Forsyth gives the instrument's stretch on one string and across two (the figures of span0 / crossMax)
+static QString forsythReach(const StringInstrument& in)
+      {
+      if (in.name == "Viola")
+            return "p. 391";
+      if (in.name == "Cello")
+            return "p. 425";
+      if (in.name == "Double bass")
+            return "p. 441";
+      return "p. 357 fn";
+      }
+
+static std::vector<Note*> visibleNotes(const Chord* c)
+      {
+      std::vector<Note*> out;
+      for (Note* n : c->notes())
+            if (n->visible())
+                  out.push_back(n);
+      return out;
+      }
 
 void Pass::checkTremolos(int st, Part* part, const QString& staffName, const StaffTexts& tx, const Walked* walked)
       {
+      auto nameOf = [this](const Chord* c, const Note* n) {
+            return c->notes().size() == 1 ? topName(c) : tpcName(n->tpc1(), n->ppitch());     // beside a hidden note
+            };
       for (int v = 0; v < VOICES; ++v) {
             int trk = st * VOICES + v;
             const Walked& w = walked[v];
@@ -949,29 +981,32 @@ void Pass::checkTremolos(int st, Part* part, const QString& staffName, const Sta
                   Tremolo* t = a->tremolo();
                   if (!t || !t->twoNotes() || t->chord1() != a)
                         continue;
+                  if (t->tremoloType() == TremoloType::C8 || t->tremoloType() == TremoloType::C16)
+                        continue;                 // measured
                   Chord* b = w.chords[i + 1];
                   int t0 = w.ticks[i];
                   const StringInstrument in = tunedAt(part, a->tick(), tx);
                   if (!in.valid())
                         continue;
-                  if (a->notes().size() != 1 || b->notes().size() != 1)
+                  const std::vector<Note*> va = visibleNotes(a), vb = visibleNotes(b);
+                  if (va.size() != 1 || vb.size() != 1)
                         continue;
-                  Note* na = a->notes()[0];
-                  Note* nb = b->notes()[0];
+                  Note* na = va[0];
+                  Note* nb = vb[0];
                   if (na->headGroup() == NoteHead::Group::HEAD_DIAMOND || nb->headGroup() == NoteHead::Group::HEAD_DIAMOND)
                         continue;
                   TremoloResult res = fingeredTremolo(in, na->ppitch(), nb->ppitch());
                   if (res.fine)
                         continue;
-                  bool red = res.verdict == Verdict::IMPOSSIBLE;
-                  markOver(na, red ? PlayMark::IMPOSSIBLE : PlayMark::OUT_OF_REACH);
-                  markOver(nb, red ? PlayMark::IMPOSSIBLE : PlayMark::OUT_OF_REACH);
-                  QString reason = red
-                        ? "fingered tremolo too wide (" + intervalName(res.interval) + ")"
+                  markOver(na, PlayMark::OUT_OF_REACH);
+                  markOver(nb, PlayMark::OUT_OF_REACH);
+                  QString reason = res.wide
+                        ? "fingered tremolo too wide (" + intervalName(res.interval) + "): beyond the hand's stretch on one string "
+                          "or two adjacent strings (Forsyth " + forsythReach(in) + ")"
                         : "fingered tremolo across strings " + stringName(in, res.lower) + QChar(0x2013)
                           + stringName(in, res.upper) + " (" + intervalName(res.interval) + ")";
-                  addRow(t0, w.ticks[i + 1], trk, staffName, "tremolo", red ? "impossible" : "outOfReach", reason,
-                         topName(a) + " " + QChar(0x2194) + " " + topName(b));
+                  addRow(t0, w.ticks[i + 1], trk, staffName, "tremolo", "outOfReach", reason,
+                         nameOf(a, na) + " " + QChar(0x2194) + " " + nameOf(b, nb));
                   }
             }
       }
@@ -1075,12 +1110,14 @@ std::vector<PartMoment> Pass::partMoments(Part* part) const
                         m.tick = tick;
                         m.sub = sub;
                         for (Note* n : ch->notes()) {
+                              if (!n->visible())
+                                    continue;     // hidden notes are not played: no hand, drum or pedal for them
                               int e2 = end;
                               if (grace < 0) {
                                     const Chord* lc = n->lastTiedNote()->chord();
                                     e2 = (lc->tick() + lc->actualTicks()).ticks();
                                     }
-                              m.notes.push_back({ n, ch, grace, e2, hand, n->tieBack() == nullptr, own });
+                              m.notes.push_back({ n, ch, grace, e2, hand, n->tieBack() == nullptr, own, text != texts.end() });
                               }
                         };
                   const QVector<Chord*>& graces = c->graceNotes();
@@ -2365,7 +2402,7 @@ void Pass::checkChoirRange(Part* part, const QString& staffName)
                         continue;
                   QStringList names;
                   for (Note* n : toChord(e)->notes()) {
-                        if (n->tieBack() || (n->ppitch() >= rg->lo && n->ppitch() <= rg->hi))
+                        if (!n->visible() || n->tieBack() || (n->ppitch() >= rg->lo && n->ppitch() <= rg->hi))
                               continue;
                         markOver(n, PlayMark::OUT_OF_REACH);
                         names << tpcName(n->tpc1(), n->ppitch());
@@ -3655,9 +3692,13 @@ TimpaniPlan Pass::checkTimpani(Part* part, const QString& staffName, std::vector
 
 //---------------------------------------------------------
 //   checkKeyboard (K1)
-//    the notes each hand strikes at once (main chords, all voices, cross-staff moves followed;
-//    organ pedals left out): more than a 9th a warning, more than a 10th red, unless arpeggiated
-//    (Blatter p. 244). No note count: a finger can take two neighbouring keys.
+//    the notes the hands strike at once (main chords, all voices, both staves; organ pedals left
+//    out): more than a 9th a warning, more than a 10th red, unless arpeggiated (Blatter p. 244). No
+//    note count: a finger can take two neighbouring keys. The staves do not decide the hands: every
+//    division of the struck notes by pitch into a lower (left) and an upper (right) hand is tried,
+//    one hand may take them all, and the moment is marked only when no division keeps both hands
+//    within a 9th; a note under a hand text (L.H. / R.H.) stays in its hand. The marks and the
+//    colour are the best division's (the one whose wider hand is narrowest).
 //---------------------------------------------------------
 
 static QString spanName(int semitones)
@@ -3702,16 +3743,74 @@ static std::vector<HandSpan> overspans(const PartMoment& m, bool own)
       return out;
       }
 
+// one division of a moment's struck notes between the hands: the hands over the warning limit
+struct HandSplit {
+      std::vector<HandSpan> over;
+      int worst { 0 };              // the wider of the two hands' spans counted (an arpeggiated hand counts 0)
+      int moved { 0 };              // notes given to the other staff's hand than the one they are shown on
+      };
+
+// lower notes (pitch order) [0, cut) to the left hand (1), the rest to the right hand (0)
+static HandSplit splitAt(const PartMoment& m, const std::vector<const PartNote*>& struck, size_t cut)
+      {
+      HandSplit out;
+      for (int hand = 0; hand < 2; ++hand) {
+            HandSpan h { hand, {}, 0 };
+            for (size_t i = hand == 1 ? 0 : cut; i < (hand == 1 ? cut : struck.size()); ++i)
+                  h.notes.push_back(struck[i]);
+            if (h.notes.size() < 2)
+                  continue;
+            h.span = h.notes.back()->note->ppitch() - h.notes.front()->note->ppitch();
+            bool arp = true;                        // every staff the hand's notes are shown on arpeggiated
+            for (const PartNote* pn : h.notes)
+                  arp &= arpeggioOver(m, pn->hand);
+            if (arp)
+                  continue;
+            out.worst = std::max(out.worst, h.span);
+            if (h.span > KEYBOARD_NINTH)
+                  out.over.push_back(h);
+            }
+      for (size_t i = 0; i < struck.size(); ++i)
+            out.moved += struck[i]->hand != (i < cut ? 1 : 0);
+      return out;
+      }
+
 void Pass::checkKeyboard(Part* part, const QString& staffName)
       {
       for (const PartMoment& m : partMoments(part)) {
             if (m.sub != 0 || !m.attack())
                   continue;
-            std::vector<HandSpan> over = overspans(m, false);
-            // notes moved to another staff may belong to the hand of their own staff: mark only
-            // when no assignment fits
-            if (!over.empty() && overspans(m, true).empty())
-                  continue;
+            std::vector<const PartNote*> struck;
+            for (const PartNote& pn : m.notes)
+                  if (pn.attack && pn.hand >= 0 && pn.hand < 2)     // organ pedals (a third staff) left out
+                        struck.push_back(&pn);
+            std::stable_sort(struck.begin(), struck.end(), [](const PartNote* a, const PartNote* b) {
+                  return a->note->ppitch() < b->note->ppitch(); });
+            // the best division by pitch that keeps the hand texts' notes in their hands
+            bool found = false;
+            HandSplit best;
+            for (size_t cut = 0; cut <= struck.size(); ++cut) {
+                  bool keeps = true;
+                  for (size_t i = 0; i < struck.size(); ++i)
+                        if (struck[i]->pinned && struck[i]->hand != (i < cut ? 1 : 0))
+                              keeps = false;
+                  if (!keeps)
+                        continue;
+                  HandSplit sp = splitAt(m, struck, cut);
+                  if (!found || sp.worst < best.worst || (sp.worst == best.worst && sp.moved < best.moved)) {
+                        best = sp;
+                        found = true;
+                        }
+                  }
+            std::vector<HandSpan> over;
+            if (found)
+                  over = best.over;
+            else {
+                  // the hand texts cross by pitch: the staves as shown, and moved notes on their own staff
+                  over = overspans(m, false);
+                  if (!over.empty() && overspans(m, true).empty())
+                        continue;
+                  }
             for (const HandSpan& h : over) {
                   if (h.span > KEYBOARD_TENTH)
                         momentRow(m, h.notes, staffName, "span", true,
@@ -4321,7 +4420,10 @@ ChordInfo Pass::inspectBody(Chord* chord)
             if (isHarmonicCircle(a->symId()))
                   chordCircle = true;
       bool anyD = false, anyC = chordCircle;
+      const bool anyVisible = std::any_of(chord->notes().begin(), chord->notes().end(), [](const Note* n) { return n->visible(); });
       for (Note* n : chord->notes()) {
+            if (anyVisible && !n->visible())
+                  continue;               // hidden notes are not checked (handle)
             bool d = n->headGroup() == NoteHead::Group::HEAD_DIAMOND;
             bool c = chordCircle;
             for (const Element* e : n->el())

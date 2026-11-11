@@ -106,6 +106,7 @@ class TestPlayability : public QObject, public MTest
       void slurRepeats();
       void c1c3OnOldFixtures();
       void falseAlarms();
+      void falseAlarms2();
       void noDynamic();
       void dump();
       };
@@ -186,6 +187,17 @@ void TestPlayability::rules()
       QVERIFY(lookup("", "Violins I", -1).section);
       QCOMPARE(lookup("", "Violoncello", -1).name, QString("Cello"));
       QVERIFY(!lookup("wind.flutes.flute", "Flute", 73).valid());
+      // F5 (2026-11-11): the name is read only for no id or a strings id, and "contrabass" in a wind's name is no double bass
+      QVERIFY(!lookup("wind.reed.contrabassoon", "Bassoon III / Contrabassoon", 70).valid());
+      QVERIFY(!lookup("brass.trombone.contrabass", "Contrabass Trombone", 57).valid());
+      QVERIFY(!lookup("", "Contrabassoon", -1).valid());
+      QVERIFY(!lookup("", "Contrabass Clarinet", -1).valid());
+      QVERIFY(!lookup("", "Contrabass Tuba", -1).valid());
+      QVERIFY(!lookup("", "Kontrabassklarinette", -1).valid());
+      QCOMPARE(lookup("", "Contrabass", -1).name, QString("Double bass"));
+      QCOMPARE(lookup("", "Kontrabass", -1).name, QString("Double bass"));
+      QCOMPARE(lookup("", "Contrabasso", -1).name, QString("Double bass"));
+      QCOMPARE(lookup("strings.group", "Contrabasses", 48).name, QString("Double bass"));
 
       QCOMPARE(spanAt(6, 0), 6.0);
       QCOMPARE(fmtReach(8.64), QString("8.6"));
@@ -913,6 +925,20 @@ void TestPlayability::htkRules()
       // a lone F2: the drum whose middle is nearest (32" 41.5, 29" 44.5)
       p = planTimpani({ { 0, { 41 }, { 1 } } }, false);
       QCOMPARE(p.moments[0][0].drum, 0);
+      // F6 (2026-11-11, Bartók's F#2 + B2, then D3 + A2 2.2 s later): the look-ahead puts B2 on the 26", so all four
+      // pitches have a drum of their own and nothing retunes (B2 on the 29" left A2 only a 2.2 s retune)
+      p = planTimpani({ { 0, { 42, 47 }, { 1, 1 } }, { 3.2, { 45, 50 }, { 4.2, 4.2 } } }, false);
+      QCOMPARE(p.moments[0][0].drum, 0);                    // F#2 on the 32"
+      QCOMPARE(p.moments[0][1].drum, 2);                    // B2 on the 26"
+      QCOMPARE(p.moments[1][0].drum, 1);                    // A2 on the 29"
+      QCOMPARE(p.moments[1][1].drum, 3);                    // D3 on the 23"
+      for (const auto& mo : p.moments)
+            for (const TimpaniNotePlan& n : mo)
+                  QVERIFY(n.problem == TimpaniNotePlan::Problem::NONE && n.from < 0);
+      // the control: five pitches within 15 s on four drums still retune (E2 fits only the 32", which holds D2)
+      p = planTimpani({ { 0, { 38, 45 }, { 1, 1 } }, { 2, { 50, 57 }, { 3, 3 } }, { 4, { 40 }, { 5 } } }, false);
+      QVERIFY(p.moments[2][0].problem == TimpaniNotePlan::Problem::RETUNE);
+      QCOMPARE(p.moments[2][0].from, 38);
       // C4 needs the fifth drum
       QVERIFY(planTimpani({ { 0, { 60 }, { 1 } } }, false).moments[0][0].problem == TimpaniNotePlan::Problem::RANGE);
       QCOMPARE(planTimpani({ { 0, { 60 }, { 1 } } }, true).moments[0][0].drum, 4);
@@ -986,8 +1012,11 @@ void TestPlayability::keyboard()
       QStringList want = {
             QString::fromUtf8("2 | Piano | risky | the right hand spans a minor 10th, more than a 9th | C4 + D#5"),
             QString::fromUtf8("3 | Piano | impossible | the left hand spans 17 semitones, more than a 10th | C3 + F4") };
-      // bar 5 (C4 E4 in the upper staff, F5 written in the lower staff and moved up) is clean: F5 can be the left
-      // hand's own note, so the right hand has C4 E4 and the left hand F5 alone (falseAlarms has the staffMove cases)
+      // bar 5 (C4 E4 in the upper staff, F5 written in the lower staff and moved up) is clean: the left hand takes
+      // C4 E4, the right hand F5 (falseAlarms has the staffMove cases). Since 2026-11-11 the hands are any division of the
+      // struck notes by pitch: bars 2-3 have notes in the other hand too (keys-tests.mscx regenerated), so these two
+      // rows are the same as before
+
       compare(got, want);
       delete score;
       }
@@ -2445,8 +2474,9 @@ void TestPlayability::falseAlarms()
       r = Playability::analyse(score);
       got = kindRows(r, { "span", "clef", "firstDynamic" });
       want = QStringList {
-            // a chord moved down a staff that is wide by itself, and a bass octave under it
-            "5 | Piano | span | impossible | C2 + C3 + C4 + G5",
+            // a chord moved down a staff that is wide by itself, and a bass octave under it (2026-11-11: the best division
+            // gives the left hand C2 C3, so the row names the right hand's C4 + G5 alone)
+            "5 | Piano | span | impossible | C4 + G5",
             // voice 2 marked R.H.
             "8 | Piano | span | risky | G3 + B4",
             // below the treble clef and above the bass clef a clef change helps
@@ -2463,6 +2493,69 @@ void TestPlayability::falseAlarms()
       r = Playability::analyse(score);
       QCOMPARE(kindRows(r, { "slurRepeat" }), QStringList({ "1 | Violin | slurRepeat | notation | A4" }));
       QCOMPARE(kindRows(r, { "tempo" }), QStringList());
+      delete score;
+      }
+
+//---------------------------------------------------------
+//   falseAlarms2: the second sweep's fixes (F1-F6, 2026-11-11; tools/playability/gen_falsealarm2_tests.py), each with a
+//   control that a genuinely unplayable case is still marked
+//---------------------------------------------------------
+
+void TestPlayability::falseAlarms2()
+      {
+      // F1: the hands are any division of the struck notes by pitch
+      MasterScore* score = readScore(DIR + "falsealarm2-keys.mscx");
+      QVERIFY(score);
+      PlayabilityResult r = Playability::analyse(score);
+      QStringList want = {
+            // A1 + E3 under A4: no division under an 11th (the left hand alone A1, the right hand E3 A4)
+            "4 | Piano | the right hand spans 17 semitones, more than a 10th | impossible | E3 + A4",
+            // the left hand busy with C2 G2: the right hand's minor 10th stays a warning
+            "5 | Piano | the right hand spans a minor 10th, more than a 9th | risky | C4 + Eb5" };
+      QStringList got;
+      for (const PlayabilityRow& row : r.rows)
+            if (row.kind == "span")
+                  got << QString("%1 | %2 | %3 | %4 | %5").arg(row.bar).arg(row.staff, row.reason, row.verdict, row.notes);
+      got.sort();
+      compare(got, want);
+      delete score;
+
+      // F2 measured tremolos, F3 a hidden note, F4 a circle on an open string
+      score = readScore(DIR + "falsealarm2-strings.mscx");
+      QVERIFY(score);
+      r = Playability::analyse(score);
+      const QString T = " " + QString(QChar(0x2194)) + " ";
+      want = QStringList {
+            // F3 control: the same chord with both notes shown is one string's two notes
+            "2 | Violoncello | stop | impossible | D2 (IV) + Eb2 (\u2014)",
+            // F2: unmeasured, too wide for one hand: dark yellow, never red; across two strings as before
+            "5 | Violoncello | tremolo | outOfReach | D2" + T + "D3",
+            "6 | Violoncello | tremolo | outOfReach | F2" + T + "C3",
+            // F4 control: no natural harmonic sounds B4 on the viola
+            "2 | Viola | harmonic | impossible | B4 (" + QString(QChar(0x2014)) + ")" };
+      want.sort();
+      compare(kindRows(r, { "stop", "tremolo", "harmonic" }), want);
+      for (const PlayabilityRow& row : r.rows)
+            if (row.kind == "tremolo" && row.bar == 5)
+                  QCOMPARE(row.reason, QString("fingered tremolo too wide (octave): beyond the hand's stretch on one string or two "
+                                               "adjacent strings (Forsyth p. 425)"));
+      // F4: the circled A4 is the open A string
+      QStringList m = marks(score, r);
+      QVERIFY2(m.contains("Viola | 0 | 69 | open"), qPrintable(m.join("\n")));
+      // the panel reads it the same way
+      ChordInfo ci = Playability::inspect(chordAt(score, 0, 4));
+      QVERIFY2(ci.text.contains("open string"), qPrintable(ci.text));
+      // F3: the panel leaves the hidden E-flat out too
+      ci = Playability::inspect(chordAt(score, 0, 0));
+      QVERIFY2(!ci.text.contains("Eb2"), qPrintable(ci.text));
+      delete score;
+
+      // F5: the contrabassoon is no double bass
+      score = readScore(DIR + "falsealarm2-winds.mscx");
+      QVERIFY(score);
+      r = Playability::analyse(score);
+      QStringList slurs = kindRows(r, { "slur" });
+      QCOMPARE(slurs, QStringList({ QString::fromUtf8("1 | Double Bass | slur | outOfReach | A2 \u2026 A2 (2 notes)") }));
       delete score;
       }
 

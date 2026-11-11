@@ -25,10 +25,12 @@ timp-tests.mscx   three timpani parts, quarter = 60 (a bar is 4 s)
   Timpani 3     a staff text "piccolo timpano", 1 C4: clean
 keys-tests.mscx   Piano (keyboard.piano)
   1  RH C4 E4 G4 C5 (an octave), LH C3 + D4 (a major 9th): clean
-  2  RH C4 + D#5 (15 semitones): warning
-  3  LH C3 + F4 (17): red
-  4  the same, arpeggiated: clean
-  5  RH C4 + E4, LH F5 moved to the upper staff: the right hand spans 17: red
+  2  RH C4 + D#5 (15 semitones), LH C2 + G2: warning (no division of the notes between the hands does better)
+  3  LH C3 + F4 (17), RH G5 C6 E6: red
+  4  the same, the LH arpeggiated: clean
+  5  RH C4 + E4, LH F5 moved to the upper staff: clean (the left hand can take C4 E4, the right F5)
+  (2026-11-11: the hands are any division of the struck notes by pitch; bars 2-4 got their other hand's notes so they
+  stay a warning, a red and its arpeggiated twin)
 Run: python3 tools/playability/gen_htk_tests.py
 """
 import os
@@ -112,8 +114,8 @@ write('timp-tests.mscx', [part('Timpani', 'drum.timpani', ['F'], 47), part('Timp
                           part('Timpani 3', 'drum.timpani', ['F'], 47)], [t1, t2, t3])
 
 # keyboard
-up = [whole('C4 E4 G4 C5'), whole('C4 D#5'), REST, REST, whole('C4 E4')]
-lo = [whole('C3 D4'), REST, whole('C3 F4'), whole('C3 F4', arpeggio=True), whole('F5', move=-1)]
+up = [whole('C4 E4 G4 C5'), whole('C4 D#5'), whole('G5 C6 E6'), whole('G5 C6 E6'), whole('C4 E4')]
+lo = [whole('C3 D4'), whole('C2 G2'), whole('C3 F4'), whole('C3 F4', arpeggio=True), whole('F5', move=-1)]
 up[0] = head('G') + up[0]
 lo[0] = head('F') + lo[0]
 write('keys-tests.mscx', [part('Piano', 'keyboard.piano', ['G', 'F'], 0)], [up, lo])

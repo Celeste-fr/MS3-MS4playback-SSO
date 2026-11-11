@@ -126,14 +126,18 @@ headless test scores and their checked results are the parity tests.
   lower left, cross-staff followed): more than 4 notes red unless arpeggiated, wider than a 10th
   (10 strings) a warning, the right hand in C1–B1 a warning. Timpani (P1, `planTimpani`): 32″ 29″
   26″ 23″, the 20″ only when the part's names or a staff text name a fifth drum; each pitch on a
-  free drum (one already tuned to it, else one that leaves 15 s, else the nearest middle); too many
+  free drum (one already tuned to it, else one that leaves 15 s, else one that leaves the pitches of the next 15 s a
+  drum each with no retune, else the nearest middle); too many
   pitches, no drum, no free drum red; a retune under 15 s (tempo marks) a warning. Keyboard (K1):
   a hand's span over a 9th a warning, over a 10th red, an arpeggio exempts; organ pedals left out. Only notes
-  struck count (tied continuations do not). A note moved to another staff goes to the hand of the staff it is shown
-  on; when a hand is over the limit that way, the moved notes are also tried in the hand of the staff they are
-  written on, and the moment is marked only if neither assignment fits. A staff text L.H. / R.H. / m.s. / m.d.
+  struck count (tied continuations do not). Since 2026-11-11 the staves do not decide the hands: every division of
+  the moment's struck notes by pitch into a lower (left) and an upper (right) hand is tried, one hand may take them
+  all, and the moment is marked only when no division keeps both hands within a 9th; the row names the best
+  division's hand(s) and notes (below, "False alarms from the second sweep"). A staff text L.H. / R.H. / m.s. / m.d.
   (any case, with or without the dots) gives the chords of the voice it is written in to that hand, from its tick
-  until the next hand text of that voice or a rest longer than a measure (`Pass::handTexts`).
+  until the next hand text of that voice or a rest longer than a measure (`Pass::handTexts`); those notes stay in
+  that hand in every division (when the hand texts cross by pitch, the staves as shown decide, and moved notes are
+  also tried on the staff they are written on).
   Rows of kind `pedals`, `harp hand`, `timpani`, `span`; marks as the others. The panel's diagram
   follows the selection: pedal diagram (changes highlighted), drums side by side with range, pitch,
   next retune and its time, keyboard strip with the octave, 9th and 10th from the lowest note
@@ -522,3 +526,39 @@ has the players divide it unless "non div." is marked, so a red could fall on so
 (`nonDivState`; also "non-div.", "nicht geteilt", "non divisé") it stays red, a plain "non div." up to the staff's next
 rest, "sempre non div." until "div." or "unis." (Sevsay p. 21 writes "sempre non divisi"); a single player's stays red.
 "nicht geteilt" was read as "geteilt" (div.) before. Test `soloDivisi` bars 3-6.
+
+## False alarms from the second sweep (2026-11-11)
+
+A sweep of 44 real scores (`~/MuseScore/orchestration-checker/research/false-alarm-sweep2.md`, "Ranked false alarms")
+found six rules putting red or dark yellow on music that sources or the repertoire play. The governing rule: red never
+on what a source or real repertoire calls playable; section and single player stay apart; no new numbers (every limit
+below is one the code already had, with its source). Test `falseAlarms2` (falsealarm2-keys/-strings/-winds.mscx from
+`tools/playability/gen_falsealarm2_tests.py`), each fix with a control that a genuinely unplayable case is still marked.
+- F1, keyboard span (K1, `Pass::checkKeyboard`): the hands are any division of the struck notes by pitch (above, Harp,
+  timpani, keyboard). The lower staff often holds tenor notes the right hand takes, or the upper staff a chord for
+  both hands (Sullivan's Lost Chord, Brahms op. 43/3, Saint-Saëns). Limits and colours unchanged (Blatter p. 244);
+  the old cross-staff retry is the special case of moved notes. keys-tests.mscx bars 2-4 got notes in the other hand
+  so they stay a warning, a red and an arpeggiated twin.
+- F2, fingered tremolo (S13, `fingeredTremolo`, `Pass::checkTremolos`): never red. No source gives a maximum interval
+  (Adler p. 30); across two strings is possible but poor in sound (Forsyth pp. 356-357; Kennan & Grantham p. 63),
+  dark yellow as before; wider than the hand's stretch on one string or two adjacent strings (Forsyth p. 357 fn,
+  pp. 391, 425, 441) is now dark yellow too, "too wide ... beyond the hand's stretch". Measured two-note tremolos (one
+  or two strokes: eighths, sixteenths) are not checked: three strokes are the unmeasured sign (Forsyth p. 357; Kennan
+  & Grantham p. 60), the fingered tremolo is usually unmeasured (Kennan & Grantham p. 62), and no rule gives the pace
+  at which a measured one becomes a tremolo (Forsyth p. 350); Mendelssohn op. 80's slurred sixteenths across two
+  strings are bowed alternations. tremolo-expected.json's two red rows are dark yellow now.
+- F3, invisible notes: a note that is not visible (MusicXML `print-object="no"`, e.g. a hidden helper that gives a
+  trill its accidental) is not played, so it is left out of the stop and harmonic check (`Pass::handle`, and the
+  panel's readout), every check built on a part's moments (`partMoments`: K1, H1/H2, P1, mallet chords, chimes, W2/B1, brass fingerings),
+  the two-note tremolo check and the choir range (R6).
+- F4, harmonic circle: a circle over a note at an open string's pitch (the tuning in force) that no natural harmonic
+  sounds is the open-string sign: an open string (its mark), not a harmonic (`classifyHarmonic`). With diamonds the
+  circle is read as before.
+- F5, string lookup (`baseInstrument`): the long name is read only when the part has no instrument id or a strings
+  id; "contrabass" / "kontrabass" in a wind's name (contrabassoon, contrabass clarinet / trombone / tuba / flute /
+  saxophone, Kontrabassklarinette …) is not a double bass. A "Bassoon III / Contrabassoon" part got double-bass bow
+  rows before.
+- F6, timpani planner (P1, `planTimpani`): before taking a drum, the planner prefers one that leaves every pitch still
+  to come within 15 s (Blatter p. 210's retune time) a drum of its own with no retune, a small matching over the
+  passage's pitch set; nothing else changes (drum ranges, the 15 s, the other preferences). Bartók's F♯2 + B2 then D3
+  + A2 now plays on four drums (B2 on the 26″), not a 2.2 s retune of the 29″.

@@ -253,10 +253,13 @@ constexpr int JETE_MAX = 6;
 
 // S13 fingered tremolo ("between notes"): fine on one string within span0 at that position or with
 // an open string; out of reach when both notes are stopped on two adjacent strings (Forsyth
-// p. 355-357: "somewhat shabby and ineffective"); impossible when no fingering reaches.
+// pp. 356-357; Kennan & Grantham p. 63: possible, but weak in effect). When no fingering reaches
+// (wider than the hand's stretch across two strings, Forsyth p. 357 fn, pp. 391, 425, 441) also out of reach, never
+// impossible: no source gives a maximum interval (Adler p. 30). The pass checks unmeasured tremolos only.
 struct TremoloResult {
-      Verdict verdict { Verdict::IMPOSSIBLE };
+      Verdict verdict { Verdict::OUT_OF_REACH };
       bool fine { false };
+      bool wide { false };          // no fingering on one string or two adjacent strings reaches
       int lower { -1 };             // string indices
       int upper { -1 };
       int interval { 0 };
@@ -380,8 +383,10 @@ struct TimpaniPlan {
       };
 // The planner (K&G p. 228, Blatter p. 211): a pitch goes to a free drum already tuned to it; else
 // to a free drum whose range holds it, choosing (1) one that leaves TIMPANI_RETUNE_SECONDS from its
-// last note to this one (a drum not yet used always does), (2) a drum not yet used, so a tuned
-// drum keeps its tuning, (3) the drum whose middle is nearest the pitch, (4) the larger drum.
+// last note to this one (a drum not yet used always does), (2) one that leaves every pitch still to
+// come within TIMPANI_RETUNE_SECONDS a drum of its own with no retune (a look-ahead over the
+// passage's pitch set, so F#2 B2 then A2 D3 is played on four drums), (3) a drum not yet used, so a
+// tuned drum keeps its tuning, (4) the drum whose middle is nearest the pitch, (5) the larger drum.
 // Pitches with fewer drums to choose from are placed first. A drum is free when it has no note
 // at this moment and its last note has ended.
 TimpaniPlan planTimpani(const std::vector<TimpaniMoment>& moments, bool fifth);

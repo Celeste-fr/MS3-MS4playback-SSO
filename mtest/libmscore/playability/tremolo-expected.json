@@ -10,8 +10,8 @@
   {
    "staff": "Violin",
    "bar": 5,
-   "verdict": "impossible",
-   "reason": "fingered tremolo too wide (17 semitones)",
+   "verdict": "outOfReach",
+   "reason": "fingered tremolo too wide (17 semitones): beyond the hand's stretch on one string or two adjacent strings (Forsyth p. 357 fn)",
    "notes": "A3 ↔ D5"
   },
   {
@@ -38,8 +38,8 @@
   {
    "staff": "Contrabass",
    "bar": 2,
-   "verdict": "impossible",
-   "reason": "fingered tremolo too wide (minor 7th)",
+   "verdict": "outOfReach",
+   "reason": "fingered tremolo too wide (minor 7th): beyond the hand's stretch on one string or two adjacent strings (Forsyth p. 441)",
    "notes": "F1 ↔ Eb2"
   }
  ],

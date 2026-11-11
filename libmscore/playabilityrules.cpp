@@ -13,6 +13,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <functional>
 #include <tuple>
 #include <QRegularExpression>
 #include <QStringList>
@@ -62,10 +63,14 @@ static StringInstrument baseInstrument(const QString& id, const QString& longNam
             { "strings.cello",      make("Cello",       { 57, 50, 43, 36 }, 4, 3) },
             { "strings.contrabass", make("Double bass", { 43, 38, 33, 28 }, 2, 2, true) },
             };
-      // fallback when the id is missing or unusual: the long name
+      // fallback when the id is missing or a strings id not listed above ("strings.group"): the long name. Never for
+      // another family's id, and "contrabass" / "kontrabass" not as part of a wind's name (contrabassoon, contrabass
+      // clarinet / trombone / tuba / flute / saxophone, Kontrabassklarinette …): those are not double basses
       static const std::vector<std::pair<QRegularExpression, QString>> NAME_HINTS = {
             { QRegularExpression("violoncell|cello|\\bvc\\b"),                     "strings.cello" },
-            { QRegularExpression("contrabass|double\\s*bass|kontrabass|\\bcb\\b"), "strings.contrabass" },
+            { QRegularExpression(QString::fromUtf8("(contrabass(?!oon|\\s*-?\\s*(clarinet|trombone|tuba|flute|sax))"
+                                                   "|kontrabass(?!klarinette|posaune|tuba|flöte|saxophon)|double\\s*bass|\\bcb\\b)")),
+              "strings.contrabass" },
             { QRegularExpression("viola|bratsche|\\bvla\\b"),                      "strings.viola" },
             { QRegularExpression("violin|violine|geige|\\bvln\\b"),                "strings.violin" },
             };
@@ -76,6 +81,8 @@ static StringInstrument baseInstrument(const QString& id, const QString& longNam
             for (const auto& p : INSTRUMENTS)               // e.g. "strings.violin-section"
                   if (id.startsWith(p.first))
                         return p.second;
+      if (!id.isEmpty() && !id.startsWith("strings."))
+            return StringInstrument();
       QString n = longName.toLower();
       for (const auto& h : NAME_HINTS)
             if (h.first.match(n).hasMatch())
@@ -592,8 +599,20 @@ static QString describeArtificial(const HarmOne& r, int stopped, int touched, co
       return s;
       }
 
-HarmonicResult classifyHarmonic(const StringInstrument& in, const std::vector<HarmonicNote>& list, const Spelling& sp)
+HarmonicResult classifyHarmonic(const StringInstrument& in, const std::vector<HarmonicNote>& written, const Spelling& sp)
       {
+      // a circle over a note at an open string's pitch (the tuning in force) that no natural harmonic sounds is the
+      // open-string sign, which looks the same: an open string, not a harmonic (with diamonds the circle is read as before)
+      bool anyDiamond = false;
+      for (const HarmonicNote& n : written)
+            anyDiamond |= n.diamond;
+      std::vector<HarmonicNote> list;
+      for (const HarmonicNote& n : written) {
+            bool open = std::find(in.strings.begin(), in.strings.end(), n.pitch) != in.strings.end();
+            if (!anyDiamond && n.circle && open && naturalAtSounding(in, n.pitch).verdict == HarmonicVerdict::IMPOSSIBLE)
+                  continue;
+            list.push_back(n);
+            }
       std::vector<HarmonicNote> diamonds, plain;
       int circles = 0;
       for (const HarmonicNote& n : list) {
@@ -844,11 +863,13 @@ TremoloResult fingeredTremolo(const StringInstrument& in, int a, int b)
                         }
                   }
             }
+      res.verdict = Verdict::OUT_OF_REACH;      // never red: no source gives a maximum (Adler p. 30)
       if (acrossLow >= 0) {
-            res.verdict = Verdict::OUT_OF_REACH;
             res.lower = acrossLow;
             res.upper = acrossHigh;
             }
+      else
+            res.wide = true;
       return res;
       }
 
@@ -1114,13 +1135,67 @@ TimpaniPlan planTimpani(const std::vector<TimpaniMoment>& moments, bool fifth)
                         if (out[i].drum < 0 && out[i].problem == P::NONE)
                               order.push_back(i);
                   std::stable_sort(order.begin(), order.end(), [&](int a, int b) { return rangeCount(out[a].pitch) < rangeCount(out[b].pitch); });
+                  // the pitches still to come within TIMPANI_RETUNE_SECONDS (this moment's unplaced ones and the later
+                  // moments'): a drum choice that leaves them a drum each with no retune is preferred
+                  std::vector<int> ahead;
+                  for (size_t k = m + 1; k < moments.size() && moments[k].start < mo.start + TIMPANI_RETUNE_SECONDS - eps; ++k)
+                        for (int p : moments[k].pitches)
+                              if (rangeCount(p) && std::find(ahead.begin(), ahead.end(), p) == ahead.end())
+                                    ahead.push_back(p);
+                  // after np goes to drum d: can every pitch to come (not np, not already on a drum) get a drum of its
+                  // own that is unused at this moment and either untuned, or tuned to a pitch not to come and free
+                  // to retune (its last note TIMPANI_RETUNE_SECONDS ago)? A small bipartite matching.
+                  auto fitsAhead = [&](int i, int d) {
+                        std::vector<int> pitchOn(tuned);
+                        for (size_t k = 0; k < out.size(); ++k)
+                              if (out[k].drum >= 0)
+                                    pitchOn[out[k].drum] = out[k].pitch;
+                        pitchOn[d] = out[i].pitch;
+                        std::vector<int> want = ahead;
+                        for (size_t k = 0; k < out.size(); ++k)
+                              if (int(k) != i && out[k].drum < 0 && out[k].problem == P::NONE
+                                 && std::find(want.begin(), want.end(), out[k].pitch) == want.end())
+                                    want.push_back(out[k].pitch);
+                        auto needed = [&](int p) { return std::find(want.begin(), want.end(), p) != want.end(); };
+                        std::vector<int> open;              // drums the pitches to come may take
+                        for (int e = 0; e < nd; ++e) {
+                              bool now = e == d || used[e];
+                              bool free = pitchOn[e] < 0 || (!needed(pitchOn[e]) && mo.start - lastEnd[e] + eps >= TIMPANI_RETUNE_SECONDS);
+                              if (!now && free)
+                                    open.push_back(e);
+                              }
+                        std::vector<int> rest;
+                        for (int p : want)
+                              if (std::find(pitchOn.begin(), pitchOn.end(), p) == pitchOn.end())
+                                    rest.push_back(p);
+                        if (rest.size() > open.size())
+                              return false;
+                        std::vector<int> owner(nd, -1);     // drum -> index in rest
+                        std::function<bool(int, std::vector<bool>&)> augment = [&](int r, std::vector<bool>& seen) {
+                              for (int e : open)
+                                    if (!seen[e] && holds(e, rest[r])) {
+                                          seen[e] = true;
+                                          if (owner[e] < 0 || augment(owner[e], seen)) {
+                                                owner[e] = r;
+                                                return true;
+                                                }
+                                          }
+                              return false;
+                              };
+                        for (int r = 0; r < int(rest.size()); ++r) {
+                              std::vector<bool> seen(nd, false);
+                              if (!augment(r, seen))
+                                    return false;
+                              }
+                        return true;
+                        };
                   for (int i : order) {
                         TimpaniNotePlan& np = out[i];
                         int best = -1;
                         auto key = [&](int d) {
                               double secs = tuned[d] < 0 ? 1e9 : mo.start - lastEnd[d];
-                              return std::make_tuple(secs + eps >= TIMPANI_RETUNE_SECONDS ? 0 : 1, tuned[d] < 0 ? 0 : 1,
-                                                     std::fabs(np.pitch - drums[d].middle()), d);
+                              return std::make_tuple(secs + eps >= TIMPANI_RETUNE_SECONDS ? 0 : 1, fitsAhead(i, d) ? 0 : 1,
+                                                     tuned[d] < 0 ? 0 : 1, std::fabs(np.pitch - drums[d].middle()), d);
                               };
                         for (int d = 0; d < nd; ++d) {
                               if (used[d] || !holds(d, np.pitch) || (tuned[d] >= 0 && lastEnd[d] > mo.start + eps))
