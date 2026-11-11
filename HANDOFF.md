@@ -123,6 +123,8 @@ day (CLAUDE.md › Score scripts in Lua is the map; the design is in the headers
 `scriptengine.h`, `mscore/scriptconsole.h`).
 
 What exists
+
+- C-style logic (owner 2026-11-10, "make all of them work, lua is confusing as hell"): `|`/`||` or, `&`/`&&` and, `!` not, `!=` ~= are accepted anywhere in a script (`cLogic` in scorescript.lua; `a | b == c` is `a or (b == c)`, not C's bitwise precedence; bitwise `|` `&` given up; errors report lines, not columns). Hover and highlighter know them.
 - `thirdparty/lua`: Lua 5.4.9 (sha256 checked against lua.org), target `lua`, `lua_standalone` for tests.
 - `libmscore/script/scorescript.lua`: the whole language (rewrite, queries, selections, names, sandbox, preview, editor
   support: `check`, `complete`, `help`, `words`). One file for MuseScore, the playground and plain lua.

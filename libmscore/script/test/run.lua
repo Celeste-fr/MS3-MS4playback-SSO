@@ -340,6 +340,37 @@ check("help: a section lists its parts", M.help("violins") == "Violin I, Violin 
 local json = M.runJSON("print(count(violin1, measure == 1))")
 check("runJSON: the result as JSON", json:find('"kind":"print"', 1, true) and json:find('"matched":[', 1, true), json:sub(1, 200))
 
+-- C-style logic: || | && & != ! (the owner, 2026-11-10)
+do
+  local function rw(a, b) local r = M.rewrite(a); check("C logic: " .. a:gsub("\n", " "), r:gsub("%s+", " ") == b, r) end
+  rw("x = a || b", "x = a or b")
+  rw("x = a | b", "x = a or b")
+  rw("x = a && b", "x = a and b")
+  rw("x = a & b", "x = a and b")
+  rw("x = a != b", "x = a ~= b")
+  rw("x = !a", "x = not a")
+  rw("x = !a == b", "x = not a == b")
+  rw("x = a | b == c", "x = a or b == c")
+  rw("x = a ~= b // 2 .. 'x' ~ 1", "x = a ~= b // 2 .. 'x' ~ 1")
+  rw('x = "a || b != c && !d | e"', 'x = "a || b != c && !d | e"')
+  rw("x = [[a || b]] -- c && d", "x = [[a || b]] -- c && d")
+  rw("x = 1 --[[ | ]] + 2", "x = 1 --[[ | ]] + 2")
+  check("C logic keeps the line count", lines(M.rewrite("a ||\n b &&\n !c")) == 2)
+  check("C logic: a chain around && still chains", M.rewrite("count(1 <= measure <= 4 && !grace)"):find("and", 1, true) ~= nil)
+  local function cnt(src) fresh(); local r = run("print(" .. src .. ")"); return r.error and ("ERR " .. r.error) or r.log[1].text end
+  local function eq(c, l) local a, b = cnt(c), cnt(l); check("C logic runtime: " .. c, a == b and not a:find("^ERR"), a .. " / " .. b) end
+  eq("count(winds | brass)", "count(winds or brass)")
+  eq("count(strings && !basses)", "count(strings and not basses)")
+  eq("count(violas || celli, beat != 1)", "count(violas or celli, beat ~= 1)")
+  eq("count(violin1 & measure == 1)", "count(violin1 and measure == 1)")
+  eq("count(1 <= measure <= 2 && violin1)", "count(1 <= measure <= 2 and violin1)")
+  fresh(); local r = run("x = 3\nif x != 2 then print(1) end\nif !(x == 3) || x != 3 then print(2) end")
+  check("plain Lua line with != and ||", not r.error and #r.log == 1 and r.log[1].text == "1", r.error)
+  check("hover help for | || & && ! != ~=", M.help("|"):find("or", 1, true) and M.help("&&"):find("and", 1, true) and M.help("!"):find("not", 1, true)
+        and M.help("!="):find("~=", 1, true) and M.help("or"):find("||", 1, true) and M.help("and"):find("&&", 1, true)
+        and M.help("not"):find("!", 1, true) and M.help("~="):find("!=", 1, true))
+end
+
 local t0 = os.clock()
 for _ = 1, 5 do run("findall(strings, 1 <= measure <= 16, slur, slur.index == 1)") end
 print(string.format("    timing: %.1f ms per run", (os.clock() - t0) / 5 * 1000))

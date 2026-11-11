@@ -140,7 +140,7 @@ condition argument `function(_ENV) return … end` (chained comparisons, `beat =
 as ordered values, `part == "name"`, `slur.x` safe on unslurred notes), conditions are true / false (a mark = `has(mark)`),
 declarations hiding a note property / section / mark are errors, the five query names reserved; the unit is the note (a tied
 note one note, grace notes only with `grace`), marks per chord and idempotent; a whitelist sandbox, an instruction limit no
-`pcall` swallows, a preview on shadow marks; selections stale after the notes change. **`libmscore/script/scriptengine.*`**
+`pcall` swallows, `|` / `||` or, `&` / `&&` and, `!` not, `!=` ~= accepted anywhere in a script (a token pass; bitwise | & given up), a preview on shadow marks; selections stale after the notes change. **`libmscore/script/scriptengine.*`**
 (`ScriptEngine`: the host, in libmscore so that mtests and the command line need no GUI): `snapshot(score)` walks the master
 score into plain data (parts with instrument id / family / group: sections never come from part names; `measure` the printed
 number, `index` counted, `beat` in the time signature's beats, written `pitch` / `name`, `sounding`, `degree` by the key

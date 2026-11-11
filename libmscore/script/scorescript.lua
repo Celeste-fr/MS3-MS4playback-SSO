@@ -9,6 +9,8 @@
 --     findall(strings, 1 <= measure <= 16, slur, slur.index == 1).add(marcato)
 -- also first(...), last(...), next(m, ...), count(...). That isn't Lua: before loading, the source is REWRITTEN
 -- (M.rewrite, a token pass; line numbers are kept):
+--   * C-style logic anywhere in a script: || and | -> or, && and & -> and, != -> ~=, ! -> not (cLogic; Lua's bitwise
+--     | & are given up on purpose, so `a | b == c` is `a or (b == c)`; ~ // .. ~= and text are left as they are);
 --   * each top-level argument of those five calls becomes  function(_ENV) return <arg> end  (a function literal is
 --     left alone; next's first argument, the bar, too), so inside a condition every name is looked up on the note:
 --     its properties, the score's sections and parts, marks, durations, dynamics, then the script's own globals;
@@ -426,7 +428,32 @@ function rewriteToks(toks, calls)
   end
   return concat(out)
 end
-local function rewrite(src, calls) return rewriteToks(tokenize(src), calls) end
+-- C-style logic everywhere in a script (the owner, 2026-11-10: "make all of them work, lua is confusing as hell"):
+-- || and | -> or, && and & -> and, != -> ~=, ! -> not. Strings and comments are single tokens, so they stay as
+-- written; ~= // .. ~ are other tokens and stay too (Lua's bitwise | & are given up: `a | b == c` is
+-- `a or (b == c)`, not C's). The replacement is padded with spaces; errors report lines only, so columns don't matter.
+local function cLogic(toks)
+  local out, i, n = {}, 1, #toks
+  local function adj(a, b) return a and b and a.t == "op" and b.t == "op" and b.pos == a.pos + #a.v end
+  local function word(w, t)
+    out[#out + 1] = {t = "ws", v = " ", line = t.line}
+    out[#out + 1] = {t = "kw", v = w, line = t.line}
+    out[#out + 1] = {t = "ws", v = " ", line = t.line}
+  end
+  while i <= n do
+    local t = toks[i]
+    local nx = toks[i + 1]
+    if t.t == "op" and (t.v == "|" or t.v == "&") then
+      word(t.v == "|" and "or" or "and", t)
+      i = i + ((nx and nx.v == t.v and adj(t, nx)) and 2 or 1)
+    elseif t.t == "op" and t.v == "!" then
+      if nx and nx.v == "=" and adj(t, nx) then out[#out + 1] = {t = "op", v = "~=", line = t.line, pos = t.pos}; i = i + 2
+      else word("not", t); i = i + 1 end
+    else out[#out + 1] = t; i = i + 1 end
+  end
+  return out
+end
+local function rewrite(src, calls) return rewriteToks(cLogic(tokenize(src)), calls) end
 local function posError(e)                -- {line, msg} -> "line N: msg"
   if type(e) == "table" and e.msg then return (e.line and ("line " .. e.line .. ": ") or "") .. e.msg, e.line end
   return tostring(e), nil
@@ -1249,7 +1276,7 @@ end
 local function prepare(src)               -- -> code, calls | nil, message, line
   local calls = {}
   local ok, r = pcall(function()
-    local toks = tokenize(src)
+    local toks = cLogic(tokenize(src))
     checkNames(toks)
     return rewriteToks(toks, calls)
   end)
@@ -1408,8 +1435,11 @@ local function kindOf(w)
   return nil
 end
 local LUA_DOC = {
-  ["and"] = "Lua keyword: both conditions true", ["or"] = "Lua keyword: either condition true",
-  ["not"] = "Lua keyword: the opposite of a condition", ["if"] = "Lua keyword: if cond then … end",
+  ["and"] = "Lua keyword: both conditions true (also written && or &)", ["or"] = "Lua keyword: either condition true (also written || or |)",
+  ["not"] = "Lua keyword: the opposite of a condition (also written !)",
+  ["|"] = "same as or: either condition true (also ||)", ["||"] = "same as or: either condition true (also |)",
+  ["&"] = "same as and: both conditions true (also &&)", ["&&"] = "same as and: both conditions true (also &)",
+  ["!"] = "same as not: the opposite of a condition", ["!="] = "same as ~= : not equal", ["~="] = "Lua: not equal (also written !=)", ["if"] = "Lua keyword: if cond then … end",
   ["then"] = "Lua keyword: starts the body of an if", ["else"] = "Lua keyword: the other branch of an if",
   ["elseif"] = "Lua keyword: another condition of an if", ["end"] = "Lua keyword: closes if, for, while, function, do",
   ["for"] = "Lua keyword: a loop, for i = 1, 10 do … end, or for n in sel.each() do … end",
@@ -1431,6 +1461,7 @@ local LUA_DOC = {
 }
 function M.help(word)
   local kind = kindOf(word)
+  if LUA_DOC[word] and word:find("^[|&!~]") then return LUA_DOC[word], "keyword" end
   if kind == "part" then return sectionDoc(word), kind end
   if kind == "mark" then return "mark: add(" .. word .. "), has(" .. word .. ")", kind end
   if kind == "duration" then return sformat("%s note: duration == %s (%s quarter notes)", word, word, fmtNum(DURATIONS[word])), kind end
