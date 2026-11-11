@@ -18753,7 +18753,10 @@ void TestSoundLibrary::slotLockStress()
       if (hammered.hammered <= 1000 || hammered.waits == 0)
             qWarning("slotLockStress: contention not exercised here (%lld rounds, %u waits)", hammered.hammered, hammered.waits);
 #else
-      QVERIFY(hammered.hammered > 1000);
+      // (the rounds depend on the machine's load and on the helpers: with the default helper processes each round's
+      // plug-in calls go through a pipe, ~1000 rounds on the dev VM under load against ~140 000 in-process, 2026-11-11;
+      // what proves the contention is that the audio thread met the hammering at all)
+      QVERIFY(hammered.hammered > 100);
       QVERIFY2(hammered.waits > 0, "the hammering never met the audio thread: no contention exercised");
 #endif
       QCOMPARE(differing, size_t(0));
