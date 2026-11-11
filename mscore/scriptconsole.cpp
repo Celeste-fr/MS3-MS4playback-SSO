@@ -228,6 +228,19 @@ void ScriptHighlighter::highlightBlock(const QString& text)
                   before = 'a';
                   continue;
                   }
+            if (c == '|' || c == '&' || (c == '!' && !(i + 1 < n && text[i + 1] == '='))) {
+                  // C-style or / and / not: the keywords' look (the rewrite makes them or / and / not)
+                  const int len = (i + 1 < n && text[i + 1] == c && c != '!') ? 2 : 1;
+                  setFormat(i, len, format("keyword"));
+                  i += len;
+                  before = c;
+                  continue;
+                  }
+            if (c == '!' || c == '~') {                 // != and ~=: as the other comparisons (uncoloured)
+                  i += (i + 1 < n && text[i + 1] == '=') ? 2 : 1;
+                  before = c;
+                  continue;
+                  }
             before = c;
             ++i;
             }
@@ -504,7 +517,25 @@ bool ScriptEdit::event(QEvent* e)
                   tip = _errorText;
             else {
                   c.select(QTextCursor::WordUnderCursor);
-                  const QString word = c.selectedText();
+                  QString word = c.selectedText();
+                  if (word.isEmpty() || !(word[0].isLetterOrNumber() || word[0] == '_')) {
+                        // an operator: the run of | & ! = ~ characters under the mouse (|| && != ~=)
+                        const QString text = c.block().text();
+                        const int at = cursorForPosition(he->pos()).positionInBlock();
+                        auto isOpChar = [](QChar ch) { return QString("|&!=~").contains(ch); };
+                        int a = qMin(at, int(text.size()) - 1);
+                        if (a >= 0 && !isOpChar(text[a]) && a > 0 && isOpChar(text[a - 1]))
+                              --a;
+                        word.clear();
+                        if (a >= 0 && isOpChar(text[a])) {
+                              int b = a;
+                              while (a > 0 && isOpChar(text[a - 1]))
+                                    --a;
+                              while (b + 1 < text.size() && isOpChar(text[b + 1]))
+                                    ++b;
+                              word = text.mid(a, b - a + 1);
+                              }
+                        }
                   if (!word.isEmpty()) {
                         QString kind;
                         const QString help = _engine->help(word, &kind);

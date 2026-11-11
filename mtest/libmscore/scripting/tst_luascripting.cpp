@@ -452,6 +452,8 @@ void TestScripting::editorHelpers()
       QCOMPARE(e.check("findall(violin, measure == 1).add(marcato)", &line), QString());
       QCOMPARE(e.check("\nfindall(violin, measure = 1)", &line), QString("line 2: argument 2 of findall: use == to compare (a single = assigns)"));
       QCOMPARE(line, 2);
+      QCOMPARE(e.check("findall(violin | viola, measure != 1 && !grace)", &line), QString());   // C-style logic
+      QVERIFY(e.help("||").contains("or"));
       ScriptCompletion c = e.complete("findall(cla", 11);
       QCOMPARE(c.from, 8);
       QVERIFY(!c.items.isEmpty());
