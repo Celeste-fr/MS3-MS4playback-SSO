@@ -758,6 +758,14 @@ last (the AGM trial has ended; they wait for the bought guitars).
     Va −7.03 vs −7.08, Vc +2.69 vs +2.56, Cb +3.45 vs +3.43, Trumpets a6 +19.67 vs +20.45); PLAYBACK_SETTINGS.md gives the
     harp as −9.81 and −10.41 and the presets table still says staccato D −4.2 (now −3.4); HANDOFF l.1320's "other
     patches ~24 dB lower" was superseded by the gain stage (a7b8520990). Check against the map and fix.
+38. **Slow staccato length** (the owner, 2026-11-10: "option 1 and maybe 4 later"): `[shorts] staccatoLength` caps every
+    staccato, though the caps were measured only on notes written 0.15-0.37 s. Kept everywhere because the owner picked the
+    cap by ear on slow staccatos (2026-10-24 A/B: Violins 1 quarters at 60 bpm "B", Celli "B"); capping only within the
+    measured range (option 2) was dropped (for strings it would never act: MS4's 50 % stays under 0.19 s there). Option 4,
+    later: sounding length as a curve rising with written length, fitted to fast and slow staccatos from several players,
+    strings and winds. Needs slow-staccato data first: leads so far Pàmies-Vilà et al. 2018 (10 clarinettists, 0.2-0.3 s at a
+    0.5 s IOI) and an informal pilot (bassoon / flute 0.17-0.23 s at 0.44 s written; `private/research-1110`). Then a blind
+    A/B against the cap (slow and fast, a reference recording, catch trials) before any change.
 
 ---
 
