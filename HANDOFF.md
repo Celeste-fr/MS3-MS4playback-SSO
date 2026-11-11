@@ -6,6 +6,9 @@ roughly newest first, kept for its detail; `git log` has each step's measurement
 
 ## Current state (2026-10-29)
 
+(2026-11-11: `bowed-join` and every branch this file calls "not merged" are now in `main`; for what came after, read
+`git log main` and CLAUDE.md.)
+
 - **Branches.** `main` = `integrate-1017` = eb0692b32f. `bowed-join` (worktree `.claude/worktrees/integrate-1017`) is 10
   commits ahead, tested on Linux, not merged: the audit's plain-note model, the heard check's censored transitions
   (Kaplan-Meier), `[slurs] runBends` (0 everywhere), the CC1-techniques research, realcheck driver fixes. None changes
@@ -116,7 +119,7 @@ presets, CC1 / CC11 / CC21 on channel 1; Linux Vial bundles in ~/MuseScore/ms3fo
 after vial sso's preset update, not shipped: paused too, its state in ~/vial-sso/HANDOFF.md; only CC1 works now). Owner limits: Max nearly out, then Pro (1/20 the usage): one subagent at a time, small
 targeted fixes, the owner picks what he hears.
 
-## Lua console (branch `lua-console`, 2026-11-09, from main 58984383d6; not merged, not pushed)
+## Lua console (branch `lua-console`, 2026-11-09, from main 58984383d6; merged into main)
 
 Score scripting in Lua, decided with the owner 2026-11-09 and adjusted by the design critic's eleven points the same
 day (CLAUDE.md › Score scripts in Lua is the map; the design is in the headers of `libmscore/script/scorescript.lua`,
@@ -182,7 +185,7 @@ Untested / open (fill in as they are tried)
   (untested); no `select()` of the matches yet; the playground page was not opened in a browser after the switch to
   this library (its tests pass under node).
 
-## Render ahead and the late-audio warning (branch `render-ahead`, 2026-10-31, from private/main c54b8d9043; not merged)
+## Render ahead and the late-audio warning (branch `render-ahead`, 2026-10-31, from private/main c54b8d9043; merged into main)
 
 The owner approved both (2026-10-31): his live playback sometimes turned into noise ("pure feedback noise", piano on SSO)
 while the export was clean; not reproducible now; he suspects memory / CPU load (two VMs) and won't raise the audio buffer.
@@ -233,7 +236,7 @@ Preferences › I/O while stopped and after playing; MIDI out / Live sets (no le
 appears, `load times.log` has the line with its counts (over budget, render-ahead underruns, device underflows).
 `[soundlibrary] renderAhead` in playback.ini (or `MS_RENDER_AHEAD`) changes the 500 ms; 0 is the old behaviour.
 
-## The slots' lock (branch `slot-lock`, 2026-10-31, from follow-cut 333b2f4b53; not merged)
+## The slots' lock (branch `slot-lock`, 2026-10-31, from follow-cut 333b2f4b53; merged into main)
 
 Render ahead's null test found it: `Vst3Synth::process` try_locked the slots' mutex and, when another thread held it,
 skipped the whole block (silence for it, and every hosted plug-in a block late from then on: a click at least), on the
@@ -262,7 +265,7 @@ Unconfirmed: Windows (std::mutex is an SRW lock there; `_mm_pause` in the spin; 
 scheduler slice at worst, which render ahead's 500 ms lead absorbs), Kontakt + SSO, the owner's PC. Not touched: a remote
 instance's helper side (vst3remote.cpp's `Child`) already used blocking locks.
 
-## Engine lane (branch `engine-lane`, 2026-10-27, from integrate-1017 4e6d877914; not merged)
+## Engine lane (branch `engine-lane`, 2026-10-27, from integrate-1017 4e6d877914; merged into main)
 
 The owner (2026-10-26/27): "make the playback engine automatable, so you can switch playback engine for just a few
 measures and switch back", plus a configurable fade at the switches. **Stage 1 done: the lane and hard switches. Fades
@@ -305,7 +308,7 @@ Open: the winds measure +2 .. +7 phon louder on Vial by the other loudness measu
 Vial's winds too loud against SSO, matching on phon is the alternative (`fit`'s offset by another measure: `offsetBy` lists each). Untried
 on Windows Vial (same code; the Windows build reads the same presets).
 
-## Several libraries: Vial Instrumental as an engine (branch `vial-engine`, 2026-10-26, from integrate-1017 0f4abe48ea; not merged)
+## Several libraries: Vial Instrumental as an engine (branch `vial-engine`, 2026-10-26, from integrate-1017 0f4abe48ea; merged into main)
 
 The owner (2026-10-26): "natively integrate Vial Instrumental as another playback engine, like we have now for ms3, ms4
 and sso"; MuseScore uses his installed Vial (Vial.vst3 where its installer puts it, the VST 3 folders); not found: the
@@ -343,7 +346,7 @@ engine grayed, its tooltip saying so; Vial stays a hosted VST 3 (GPL v3: never c
 - Left: Live and MIDI out for a second engine (its parts MS4 there), even levels / audit / verification for the global
   library only, `setSetupValues` from the global library, Vial Fuse chosen per engine only (not per part).
 
-## Vial Instrumental (branch `vial-map`, 2026-10-25, from integrate-1017 b163700144; not merged)
+## Vial Instrumental (branch `vial-map`, 2026-10-25, from integrate-1017 b163700144; merged into main)
 
 The owner's "SSO imitations" Vial presets as a sound library (approved 2026-10-25, relayed by the vial sessions).
 - Maps (generated: `tools/soundlibraries/gen_vial.py`, ids from the SSO map): `Vial Instrumental.xml` (hosted Vial.vst3,
@@ -373,7 +376,7 @@ on the 10 patches with the map's CC21 the held sound differs between CC21 127 / 
 -24.9 dB, 0 -3.8 .. -18.7 dB; the bassoon's 64 against 0 -30.1 dB, its depth at 64 0.26 of 127's); Basses, horn, tuba:
 CC21 changes nothing. The held level at the test's settings unchanged from the earlier presets to 5 digits.
 
-## Out-of-process host (branch `oop-host`, 2026-10-25, from integrate-1017 6dd53a9e97 + kontakt-procs; not merged)
+## Out-of-process host (branch `oop-host`, 2026-10-25, from integrate-1017 6dd53a9e97 + kontakt-procs; merged into main)
 
 The owner approved ("seems good") hosting the library's plug-ins in helper processes: build 480 showed Kontakt doing its
 setState work on its process's GUI thread even when called from a worker, so MuseScore's window froze 8-18 s per big patch;
@@ -456,7 +459,7 @@ Not merged, each with its own "Paused 2026-10-18" note on its branch:
 Load-time facts: Kontakt's setState is the cost (the instrument script is compiled once per tuning slot, +1.3-1.7 s
 per slot); MuseScore's own work is about 4 % of a score open.
 
-## Chunks equal the whole render (branch `chunk-equal`, 2026-10-25, from integrate-1017 0cb99e84be; not merged)
+## Chunks equal the whole render (branch `chunk-equal`, 2026-10-25, from integrate-1017 0cb99e84be; merged into main)
 
 Live playback (Seq: 10-bar chunks) now sends exactly the events the whole-score render sends (export, Live's clips, the
 plain set). A fix, no setting; design: CLAUDE.md › Sound libraries › Chunks, header of `MidiRenderer::renderChunk`.
@@ -483,7 +486,7 @@ plain set). A fix, no setting; design: CLAUDE.md › Sound libraries › Chunks,
   note or level lasting longer and not carried would differ (none found). `libSlurAcross` / `libNoteAfter` (chunk
   breaks avoided at slurs / bar-line notes) are no longer needed but kept (fewer windows).
 
-## Chunk-end levels (branch `chunk-end-levels`, 2026-10-25, from integrate-1017 6dd53a9e97; not merged)
+## Chunk-end levels (branch `chunk-end-levels`, 2026-10-25, from integrate-1017 6dd53a9e97; merged into main)
 
 The owner (live playback, SSO hosted, his Whence with empty bars appended after bar 16 to 48): "after bar 16 at the start of
 bar 17, it suddenly gets really loud before stopping". A fix, no setting; CLAUDE.md › Sound libraries (libraryNoteLevels).
@@ -508,7 +511,7 @@ bar 17, it suddenly gets really loud before stopping". A fix, no setting; CLAUDE
   (`guitarplayback.cpp`, restored at the chunk's end, and the volume lane's restatement at the next chunk's start): the
   same kind of jump on a strum ringing over a chunk boundary.
 
-## Async load (branch `async-load`, 2026-10-24, from integrate-1017 426a759d88; not merged)
+## Async load (branch `async-load`, 2026-10-24, from integrate-1017 426a759d88; merged into main)
 
 The owner: "is it possible for SSO to load without locking up the rest of MuseScore? just have the playback button grayed
 out during it". Done as a fix (no setting); design in soundlibraryhost.h's header, CLAUDE.md › Hosting.
@@ -548,7 +551,7 @@ out during it". Done as a fix (no setting); design in soundlibraryhost.h's heade
 - Not changed: an audio export still waits (`SoundLibraryExport` -> `sync`, modal); the GUI-thread steps above; Play
   doesn't start by itself once loaded, except after a change that stopped playback (GoOnPlaying) as before.
 
-## Staccato length (branch `staccato-length`, 2026-10-24, from integrate-1017 e951ee4a69; not merged)
+## Staccato length (branch `staccato-length`, 2026-10-24, from integrate-1017 e951ee4a69; merged into main)
 
 `[shorts] staccatoLength` (docs/PLAYBACK_SETTINGS.md › Staccato length): a library staccato (staccatissimo) is meant to
 sound, and is held, no longer than real players sound one (the map's `<Instrument staccatoLength staccatissimoLength>`,
@@ -566,7 +569,7 @@ identical (OVERLAP 0, UNMEASURED 0, CAPPED 0, ARRIVAL 12 fail, LEVEL STEP 12 inf
 - The heard length stays well above the players' because of SSO's hall on the Tree mic; RESEARCH.md 2.5a proposal c
   (measure SSO's shorts on the Close mic) and b (shorter notes before a rest) are not done.
 
-## Balance in context (branch `anechoic-balance`, 2026-10-24, from integrate-1017 329e1fa54a; not merged)
+## Balance in context (branch `anechoic-balance`, 2026-10-24, from integrate-1017 329e1fa54a; merged into main)
 
 The owner checked the score readings' spot-check page (40 of 40 right) and chose "apply the full measured balance"
 (docs/RESEARCH.md › 1.5a). `sectionLevel2` (`[levels] sectionBalance` 2, Recommended and the default): flutes +3.96,
@@ -581,7 +584,7 @@ tests: docs/BALANCE_LOG.md › Iteration 15. Open:
 - Trombones and tuba: Aalto only, no conclusion; clarinets and bassoons inside their uncertainty. A third dataset with
   several players per instrument would settle them (RESEARCH.md › 1.5a › Still unknown).
 
-## SSO load: the allocator (branch `sso-load`, 2026-10-23, from integrate-1017 7a6e1e9f0c; not merged)
+## SSO load: the allocator (branch `sso-load`, 2026-10-23, from integrate-1017 7a6e1e9f0c; merged into main)
 
 The owner, 2026-10-23: "is there any way for sso to load faster, taking the ableton optimization repo as example".
 Then (the coordinator, after the owner's PC run): ship it, always on. Details and raw data:
@@ -636,7 +639,7 @@ Then (the coordinator, after the owner's PC run): ship it, always on. Details an
   - `--create-live-set` (Whence.als, 30 s) and `--even-levels` (303 s, round 2 envelope off its slurs' medians
     0.55 dB) run as before with kheap.
 
-## kheap and realtime audio (branch `kheap-realtime`, 2026-10-24, from integrate-1017 426a759d88; not merged)
+## kheap and realtime audio (branch `kheap-realtime`, 2026-10-24, from integrate-1017 426a759d88; merged into main)
 
 The owner, 2026-10-24: since #474 live playback (hosted Kontakt + SSO through PortAudio) crackles a lot on every audio
 device, exports null; `MS_KHEAP_OFF=1` cures it. Rule: an optimization never changes the sound. Raw data and scripts:
@@ -794,7 +797,7 @@ rises; Violas bar 12's rise before the slur's beat +3.4 -> +1.1 dB (even levels 
 (#471 moved drops too: skipped.) The owner, on #472: "hell yeah whence finally sounds good now" (2026-10-23): the
 Recommended preset at 4055da9f06 is his reference for Whence; a later sound change on it needs his ear again.
 
-## Attack levels (branch `attack-levels`, 2026-10-22/23, from integrate-1017 8a827c2026; not merged)
+## Attack levels (branch `attack-levels`, 2026-10-22/23, from integrate-1017 8a827c2026; merged into main)
 
 The owner, Whence's Violas alone in #470: "when the slur starts. the volume just like jumps in a disjointed way" (bar 12
 most). Cause (private `violas-slurstart/RESULT.md`): the slur's first note, an attack after a staccato on the same key,
@@ -816,7 +819,7 @@ sent its level-rule CC11 step with its note-on, 111 ms before the beat (plainShi
   before the beat. So 2 moves **rises only** since 2026-10-23 (a drop with the note-on, as #470, which the owner called
   perfect there). Untried in real Live (the plain set's CC11 lane carries it: `attackLevelsLive`).
 
-## Slur joins (branch `slur-joins`, 2026-10-22, from integrate-1017 6d0eaddb57; not merged)
+## Slur joins (branch `slur-joins`, 2026-10-22, from integrate-1017 6d0eaddb57; merged into main)
 
 The owner, Whence's Violas alone in build #464, Recommended: "viola bar 12 and 16 slur first note sounds disjointed from the
 note before". Bars 12 / 16: G4+50 staccato eighths (the key's quarter-sharp G), a slur of sixteenths G4+50 F#4 Eb4 F#4,
@@ -848,7 +851,7 @@ apart). VM, #464's export, Violas alone; private `~/MuseScore/ms3fork/private/sl
 - Clips for the owner (not published): `~/MuseScore/ms3fork/ms37/.claude/worktrees/integrate-1017/.mixedtech/joins/clips/`
   (A #464, B #466; bars 11-13 and 15-17; `clips.json` › `joins`: each join's clip second).
 
-## Microtone bends (branch `fast-microtones`, 2026-10-21, from integrate-1017 0d30c7e614; not merged)
+## Microtone bends (branch `fast-microtones`, 2026-10-21, from integrate-1017 0d30c7e614; merged into main)
 
 The owner, Whence's Violas alone (build #458, Recommended): "the 3rd measure pitch bending sounds weird" (bar 7: A3, B3 -50,
 A3, G3 +50 sixteenths at 110 bpm on Violas - Performance, velocity 64: the fingered transition). Found on the VM (kthost +
@@ -884,7 +887,7 @@ OPEN_ITEMS 5 (refit the bowed lag there; the prediction excludes plainAuto), the
 - The fingered glide table was measured isolated (`legato_glide/gen.py --velocity=64`, `glide.py --summarise --moving`:
   medians of the glides that move, a leave or arrival at the window's start is a clamp, not a time).
 
-## Ample pipeline (branch `ample-pipeline`, 2026-10-21, from integrate-1017 95335ed024; not merged)
+## Ample pipeline (branch `ample-pipeline`, 2026-10-21, from integrate-1017 95335ed024; merged into main)
 
 For the four Ample guitars the owner buys later (AGSJ, AG12, AGL, AGT: no trials): **docs/AMPLE_PIPELINE.md** is the
 step-by-step and checklist; AGM 4.1.0 (the VM's trial, ending ~2026-10-25) was the regression case. Private results:
@@ -920,7 +923,7 @@ step-by-step and checklist; AGM 4.1.0 (the VM's trial, ending ~2026-10-25) was t
   bit-identical to #458's. **Next**: the owner hears the strums (`[guitar] strums` 1); the bought guitars by
   docs/AMPLE_PIPELINE.md.
 
-## SSO script fixes 2 (branch `sso-script-fixes2`, 2026-10-21, from integrate-1017 0a9319a9b7; not merged)
+## SSO script fixes 2 (branch `sso-script-fixes2`, 2026-10-21, from integrate-1017 0a9319a9b7; merged into main)
 
 From reading SSO's patch scripts (docs/SSO_SCRIPT_KNOWLEDGE.md). Measured on the Windows test VM with kthost (Kontakt 8 +
 SSO, copies of MuseScore's setups; private `~/MuseScore/ms3fork/private/sso-script-fixes2/RESULT.md`), not in MuseScore:
@@ -938,7 +941,7 @@ SSO, copies of MuseScore's setups; private `~/MuseScore/ms3fork/private/sso-scri
 - `MS_VERIFY_ROUTE_PASSES` (a verify-routes aid) untried on the VM. Open: hear transportReset / hallGuard in MuseScore;
   Update Live Set and *Live plays the score* don't carry transportReset (as fixedTransitions).
 
-## Copies by the free memory, deterministic (branch `voice-determinism`, 2026-10-21, from integrate-1017 0ab003951f; not merged)
+## Copies by the free memory, deterministic (branch `voice-determinism`, 2026-10-21, from integrate-1017 0ab003951f; merged into main)
 
 Symptom (private/solo-clicks, build 458): the heard check's export of one Whence copy, byte-identical input, put Violins 1
 - Performance's 92 notes on 1, 2 or 4 routes between runs (events.tsv: 92 | 79/13 | 63/18/10/1, the Linux dump
@@ -956,7 +959,7 @@ against plenty free: the same routes and channels; fails before: 1 route and eve
 memory the copies still dropped (the rule then); since `all-copies` (above) they never do. Linux only (test synth);
 Windows needs a build.
 
-## Every copy the music needs (branch `all-copies`, 2026-10-21, from integrate-1017 c3ef2da874; not merged)
+## Every copy the music needs (branch `all-copies`, 2026-10-21, from integrate-1017 c3ef2da874; merged into main)
 
 The owner's decision (2026-10-21, "2": always load every copy the music needs and warn when memory is low) replaces his
 2026-10-03 rule that the free memory caps the tuning copies. `SoundLib::lanes` has no maximum unless `maxLanes` is set
@@ -973,7 +976,7 @@ Live / MIDI out unchanged: their fixed copies never took the cap; a bending patc
 on a machine with plenty free. The heard check's `HC_FREE_MEMORY_MB` pin is unnecessary for builds with this (kept for
 older builds). Linux only (test synth); Windows needs a build; the GUI box untried with Kontakt / SSO.
 
-## Plain timing (branch `plain-timing`, 2026-10-21, from integrate-1017 15820b7b46; not merged)
+## Plain timing (branch `plain-timing`, 2026-10-21, from integrate-1017 15820b7b46; merged into main)
 
 `[slurs] plainTiming` (0 by default and in both presets; the owner decides by ear): with plainPerformance each plain note
 starts early by its own model instead of the patch's one plainShift: an attack by the map's new `plainAttack` (Mixed
@@ -998,7 +1001,7 @@ timing. Windows build #458 (https://github.com/Celeste-fr/MS3-MS4playback-SSO/ac
   `*_plainTiming1.mp3` (A, B: same cut and gain as the existing pairs) and `whence_9-31s_plainTiming0/1.mp3` (bars 5-14);
   times in `clips_plainTiming_notes.json`. Private report: `~/MuseScore/ms3fork/private/plain-timing/RESULT.md`.
 
-## Mixed techniques (branch `mixed-techniques`, 2026-10-21, from integrate-1017 3d783a6ac7; not merged)
+## Mixed techniques (branch `mixed-techniques`, 2026-10-21, from integrate-1017 3d783a6ac7; merged into main)
 
 The owner's question (2026-10-21): with `[slurs] plainPerformance` a part switching between its Performance patch and
 another technique on All techniques, do they play in time and at one level? Test score `share/verifyplayback/Mixed
@@ -1029,7 +1032,7 @@ export, Recommended, two takes: attacks identical, transitions within ~10 ms) an
   an assumption); (4) Basses' unsampled modifiers stay plain Performance. Private report and clips:
   `~/MuseScore/ms3fork/private/mixed-techniques/RESULT.md`.
 
-## Update Live Set on Ample parts (branch `liveset-hosted-readback`, 2026-10-21, from integrate-1017 56bbe38c6e; not merged)
+## Update Live Set on Ample parts (branch `liveset-hosted-readback`, 2026-10-21, from integrate-1017 56bbe38c6e; merged into main)
 
 From the Ample check of build 456 (private: `~/MuseScore/ms3fork/private/ample-check456/RESULT.md` › Findings 2; report
 `~/MuseScore/ms3fork/private/liveset-readback/RESULT.md`).
@@ -1048,7 +1051,7 @@ From the Ample check of build 456 (private: `~/MuseScore/ms3fork/private/ample-c
 - **Open**: the first update after Create Live Set still records the linked set (metaTag `liveSet`), so it modifies the
   score once; not run in real Live or with AGM (test synth as AGM, `tst_liveequivalence::hostedReadBack`).
 
-## Lane jumps and Ample's background load (branch `lane-steps`, 2026-10-20, from integrate-1017 71da2b227b; not merged)
+## Lane jumps and Ample's background load (branch `lane-steps`, 2026-10-20, from integrate-1017 71da2b227b; merged into main)
 
 From the Ample check of build 455 (private: `~/MuseScore/ms3fork/private/ample-check455/RESULT.md`, FIX4.md there).
 
@@ -1076,7 +1079,7 @@ From the Ample check of build 455 (private: `~/MuseScore/ms3fork/private/ample-c
   load may sound wrong for about a second, and parallel Ample loads might crash as amphost5 did once (not seen in
   MuseScore). The even-levels background measurer (SSO only) doesn't wait either.
 
-## Chords on monophonic patches (branch `chord-voices`, 2026-10-20, from integrate-1017 09f6847772; not merged)
+## Chords on monophonic patches (branch `chord-voices`, 2026-10-20, from integrate-1017 09f6847772; merged into main)
 
 The owner: "of course it should play every note". Whence's Celli divisi (bars 9-16) lost a note in each of its
 three-note chords: SSO's Performance patches play one legato line per slot, and two chord notes shared a slot at the same
@@ -1096,7 +1099,7 @@ sound all three notes (the verify run of SILENT.md, Celli m15 / m16), and that C
 
 Divisi level: done on branch `divisi-level` (below).
 
-## Divisi level (branch `divisi-level`, 2026-10-20, from integrate-1017 e263421d2c; not merged)
+## Divisi level (branch `divisi-level`, 2026-10-20, from integrate-1017 e263421d2c; merged into main)
 
 The owner, 2026-10-20, "yes": a chord on a mono patch should add up to one section, as a real section divided into n
 groups does. `[levels] divisi` (1 by default and in Recommended, 0 in Library default): while n voices sound together
@@ -1119,7 +1122,7 @@ Open: a fast slurred line (IOI < 350 ms) entering a chord would have its divisi 
 measures the envelope with the step in it); none in Whence (its divisi are a bar per chord). Not heard; untried with
 Kontakt / SSO and in Live.
 
-## SSO legato fixes (branch `sso-legato-fixes`, 2026-10-20, from integrate-1017 e8a330c429; not merged)
+## SSO legato fixes (branch `sso-legato-fixes`, 2026-10-20, from integrate-1017 e8a330c429; merged into main)
 
 Four tests of SSO's Performance legato on the Windows test VM (kthost, Kontakt 8 + SSO, `--wait 2`, two kthost side by
 side: renders equal `--wait 60` / serial ones at -93 dB, the fresh-process floor). Violas and Violins 1 - Performance
@@ -1152,7 +1155,7 @@ transitions / Fast transitions; LIVE.md (Create Live Set embeds the fixed state;
 `tst_soundlibrary::kontaktRandomSources` (+ speedFromWritten's layers), `tst_liveequivalence::randomSetupState`,
 `tst_playbackaudit::droppedFindings`. Untried in MuseScore with Kontakt (the state is the one measured by kthost).
 
-## Ample guitars (branch `ample-map`, 2026-10-18, from integrate-1017 c0d2f7325c; not merged)
+## Ample guitars (branch `ample-map`, 2026-10-18, from integrate-1017 c0d2f7325c; merged into main)
 
 Dormant since 2026-10-29 (the owner is not buying them): the map is `tools/soundlibraries/ample/Ample Guitar M.xml`, no longer in the engine list; the tests load it from there. Move it back into `share/soundlibraries/` to ship it. The generator's output path below is that folder.
 
@@ -1437,7 +1440,7 @@ heard check (Before a build goes to the owner).
    joins; a 1-hour null test of two identical SSO passes would decide, ~65 % if it nulls). SSO's splice rules,
    read from the patch's script: `~/MuseScore/ms3fork/private/sso-splice-notes.md` (local only). Plan:
    `private/own-legato-plan.md`; branch `own-legato`.
-## Lag probe (2026-10-16/17, branch `lag-probe`, from integrate-1012 1133362748; not merged)
+## Lag probe (2026-10-16/17, branch `lag-probe`, from integrate-1012 1133362748; merged into main)
 
 `MS_LAG_PROBE=<log>` (off by default; libmscore/lagprobe.h, mscore/lagprobesession.h, tools/lagprobe/). Windows VM,
 Kontakt 8 + SSO, build 442, Whence, Inspector open; logs local only (worktree `.lagprobe/res/`; state and details:
@@ -1458,7 +1461,7 @@ Kontakt 8 + SSO, build 442, Whence, Inspector open; logs local only (worktree `.
 - Open: rerun1's phase e playing crashed (0xC0000005, after a Kontakt VirtualUnlock error); a crashed probe leaves the
   playback mode at MS4 in `C:\claude\lagprobe\cfg` (check `soundLibrary=` before a run).
 
-## Load profile (2026-10-16, branch `load-profile`, from integrate-1012 41cdbbb311; not merged)
+## Load profile (2026-10-16, branch `load-profile`, from integrate-1012 41cdbbb311; merged into main)
 
 The owner, 2026-10-16: "is there any way at all we can make SSO load even faster"; rule the same day: "no optimizations
 should ever change the sound" (an optimization is sound-identical, proven by a render null test against the floor of two
