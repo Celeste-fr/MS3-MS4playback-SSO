@@ -113,7 +113,7 @@ Part 1; the dated narratives and superseded values behind the items below: docs/
 `rendermidi.cpp` (`collectMeasureEventsMs4`, `renderMs4Dynamics`; dynamics method 3 is the default),
 `thirdparty/fluidsynth`, `effects/musereverb`, `synthesizerstate.cpp`. One deliberate difference: an MS3 hairpin with its
 own velocity change plays as in 3.6 (`ms3HairpinVelocity()`, preference `application/playback/ms3HairpinVelocityChange`;
-`MS4_STRICT=1` disables, for exact-MS4 A/B regressions).
+`MS4_STRICT=1` disables; `ab/trace/regress.sh` sets it).
 `mscore/playbackmode.h` (MS3 / MS4 / each library engine by name, all parts) and `libmscore/partplayback.h` (per part,
 metaTag `partPlayback`: "library:<engine>" a part's own library, an old "library" the global one).
 - **Engine lane** (`libmscore/enginelane.h`; HANDOFF.md › Engine lane): an automation lane "engine" per part (MS3 / MS4 /
@@ -197,8 +197,8 @@ Microtonal Tuner plugin is frozen: update or drop `tst_tuning::pluginParity` whe
 switch and route; `finishLibraryEvents` routes, copies controllers to every patch ahead of the notes, applies early
 starts, lanes and bends. Dynamics on CC1; listed shorts take velocity. Legato transitions play on their beat, pedal
 changes one tick after their chord; the technique comes from the notation.
-- **Rule: Recommended plays the measured adjustments the owner approved, Library default none** (the owner, 2026-10-12,
-  "approved measured ones one at a time, by ear"). Every adjustment is a setting, off in Library default, on in
+- **Rule: Recommended plays the measured adjustments the owner approved, Library default none** (the owner approves them
+  one at a time, by ear; since 2026-10-12 this replaces "No automatic adjustments"). Every adjustment is a setting, off in Library default, on in
   Recommended only once the owner approved it. Settings that were removed (2026-10-07: "remove all settings not currently
   being used") are listed in docs/PLAYBACK_SETTINGS.md; old ini keys and metaTags are ignored (`REMOVED`).
 - **Configuration**: built-in defaults → `<dataPath>/playback.ini` (written with every key when missing; Edit › Reload
@@ -210,9 +210,11 @@ changes one tick after their chord; the technique comes from the notation.
 - **Levels** (default = Recommended; Library default 0 unless said; detail and sources in docs/PLAYBACK_SETTINGS.md):
   - `[levels] calibrated` 2 (a technique on velocity as loud as the part's Long at the same dynamic, plus D dB from real
     players, the map's `<Articulation heldOffset>`, `SoundLib::calibratedVelocity` / `techniqueOffsetDb` / `loudEndDb`, plus
-    MS4.7.5's offset and the Inspector's levels); `[levels] context` 1 (the level rule; the owner: the same written dynamic
+    MS4.7.5's offset and the Inspector's levels; techniques on CC1 keep the library's balance, except Performance legato notes,
+    as loud as Long by CC1, `SoundLib::calibratedController`; the level rule's slur gains never take D: it would count twice);
+    `[levels] context` 1 (the level rule; the owner: the same written dynamic
     equally loud in every string part and technique: one gain per slur from `<Articulation contextLevel>`, by CC11 and patch
-    volumes; `libmscore/contextlevel.h`).
+    volumes, the score's largest gain on the Performance patches' gain stage; `libmscore/contextlevel.h`).
   - `[levels] sectionBalance` 2 (the Clark & Luce balance; the owner: levels from real data): `<Instrument sectionLevel2>` from
     Clark & Luce 1965 as sound power, TU Berlin's directivity and the SSO side (`section_balance_cl.py` →
     `sso_cl_section_balance.json` → `SECTION_LEVEL2`), plus `ANECHOIC_SHIFT` (flutes, oboes, horns, trumpets; flutes and oboes
@@ -220,9 +222,10 @@ changes one tick after their chord; the technique comes from the notation.
     docs/BALANCE_LOG.md. 1 = the TU Berlin balance (`<Instrument sectionLevel>`).
   - `[levels] realRange` 2 (the owner: "let's use the section data wherever it's reliable"): each note plays a real player's
     change from mp at the written CC1 less SSO's own, by CC11: steps x S / 5, S the map's `<Instrument realSteps>` (Clark &
-    Luce Table I, equal steps an assumption); 1 = the Meyer rule (`realPlay`, `realSpan`, `longLevel`: `real_range.py`); the
-    part's largest R by one render (`ContextLevel::realRangeTops`) goes on the gain stage. `evenKeys` 1 (a wind / brass Long's
-    key more than 1.5 dB off its neighbours' trend plays the excess back: `<Articulation keyLevels>`, `even_keys.py`).
+    Luce Table I, equal steps an assumption); ppp / fff one step more; 1 = the Meyer rule (`realPlay`, `realSpan`, `longLevel`: `real_range.py`; also 2's fallback for a
+    patch without realSteps); the
+    part's largest R by one render (`ContextLevel::realRangeTops`) goes on the gain stage. `evenKeys` 1 (plays only with realRange: a wind /
+    brass Long's key more than 1.5 dB off its neighbours' trend plays the excess back: `<Articulation keyLevels>`, `even_keys.py`).
   - `transitionLevels` 2 (a fix: a bowed note-on's CC1 / CC11 step held to the leave and ramped to the arrival,
     `libraryTransitionTails`); `attackLevels` 2 (`attackSwitch`, `libAttackOnset`); `hallGuard` 0 in both presets until the
     owner decides (`libraryHallGuard`, the audit's HALL); `divisi` 1 (see Chords); `micCompensation`, `lowCut`, `evenLevels`:
@@ -231,7 +234,8 @@ changes one tick after their chord; the technique comes from the notation.
   - `[slurs] quick` 2 (only under staff text "non performance"): short slurred notes on Long (Rachm.), early by its own onset,
     `[slurs] quickLevel` 1 as loud as the held one (`quickLevel`, `quickDb`; Violins 1 / 2 only, `RACHM_UNUSED`).
   - `[slurs] performance` 1 (the owner: Recommended only): slurred notes of the five string sections play as under staff text
-    "performance" (`Want::slurPerformance`, `choosePerformance`; "non performance" opts out); `[slurs] transitions` 1 (fingered
+    "performance" (`Want::slurPerformance`, `choosePerformance`; "non performance" opts out; a staccato before a slur stays on
+    All techniques, so the slur starts from silence); `[slurs] transitions` 1 (fingered
     inside a slur, bowed for a slur touching the one before; `performanceNote`, `slurAt`); `[slurs] smoothStart` 1
     (`attackOnset`); `[slurs] transitionsEarly` 1 (by the modelled arrival; capped so the note before keeps keepMs / 15 ms).
   - `[slurs] plainPerformance` 1 (the owner, "C" by ear): every bowed note of such a part on its Performance legato
@@ -243,7 +247,7 @@ changes one tick after their chord; the technique comes from the notation.
   - `speedFromWritten` 0 and `fixedTransitions` 0 in both presets (CC119 from the written spacing; Kontakt random sources at
     intensity 0). `microtoneBends` 3 and `runBends` 1 (the owner: "the fix is obv better"; `microtoneSpelling`, `midEarly`,
     `runBendPath`, `RUN_SLEW_C`); `fastTransitions` 1 (`libraryFastTransitions`); `[notes] transportReset` 1
-    (`playbackScriptValues`). The Performance portamento plays at velocity 5.
+    (`playbackScriptValues`). The Performance portamento plays at velocity 5; Violas - Performance transitions at 100 (map `legatoVelocity`).
   - Off (Library default), SSO slurs play the All techniques longs, each note its own attack; a legato transition needs an
     articulation with `legato` first (`Articulation::playsTransitions`), which the SSO map has only under modifier `performance`.
 - **Performance technique** (`libmscore/performancetechnique.h`): attack smooth / spiccato / accented, transition portamento /
@@ -257,9 +261,10 @@ changes one tick after their chord; the technique comes from the notation.
   velocities, steered to a clean one: `sso_bad_samples.json`, `[notes] avoidBadSamples`) `legatoGap`: the note's velocity, and
   the note before ending `overlap` ms after it or `reattackGap` ms before it (`performanceNote`, `libJoins` in
   `finishLibraryEvents`; not across tuning lanes).
-- **Held notes start early** by their measured onset (`<Articulation onset>` by pitch, `<Onset early>` 100; metaTag
+- **Held notes start early** by their measured onset (`[heldNotes] early` 100 in Recommended, 0 in Library default, default
+  the map's `<Onset early>` 100; `<Articulation onset>` by pitch; metaTag
   `soundLibraryOnsetEarly`; every measured technique; the owner: plain Long for everything, lined up within Rasch's 30-50 ms
-  between players; `[heldNotes] early` 0 plays them as written, `byPitch` 1 each by its pitch's); the note before on its patch
+  between players; `byPitch` 0 in both presets, 1 each by its pitch's); the note before on its patch
   keeps `keepMs` of its length. A transition's measured delay (`legatoDelay`, `libFastDelay`) times only a bent transition's
   glide. HANDOFF.md has the open timing items.
 - Per-note levels (a marcato's, track levels) share one CC11 / CC1 schedule per route, `libraryNoteLevels` (`libLevels`; dB
@@ -290,15 +295,17 @@ changes one tick after their chord; the technique comes from the notation.
 - **Mic compensation** (`libmscore/contextlevel.h` › Mics; the owner: "mic changes then only affect tone and sense of space,
   never the balance"; `[levels] micCompensation` 1 in Recommended, 0 in Library default): every level is measured at the
   patch's default mix (SSO: the Tree alone at 127); a part whose mic Controllers or their lanes give another mix plays C =
-  -(that mix's level) more (map `<Instrument micLevels micDefault>`, `<Mics fader mix>`), by the patches' volumes (`Volumes::micTop`)
+  -(that mix's level) more (map `<Instrument micLevels micDefault>`, `<Mics fader mix>`; with Mic Mix Distance set, SSO's script
+  overrides the mic values sent with it), by the patches' volumes (`Volumes::micTop`)
   and, for automated mics, by CC11 per note (`trackLevel`); Live's sets and clips carry both. Measured on the VM
   (`mic_levels.py` → `sso_mic_levels.json`); other extras take their main's (an assumption); error <= 1.4 dB.
 - **Gain stage and master trim** (`libmscore/contextlevel.h`; the owner: "yeah sure let's go with utility"): every patch's levels
   above play on its own gain stage, `TrackDelays::gainStageDb`: hosted, the slot's gain (once per instance with tuning slots);
   the plain set and route set, a stock Utility named "MuseScore gain" after the Kontakt (±35 dB; `LiveSetWriter::kontaktGains`;
+  read back by name, Update Live Set edits or inserts it;
   the fader stays the Mixer's, the owner's); MIDI out by CC7 (`TrackDelays::midiVolumes`). One **master trim** per score
   (`ContextLevel::masterTrim`) lowers every patch only as much as the loudest moment needs: power sum of gain + CC11 +
-  calibrated level + the map's `<Dynamics crest>` (14.5 dB, `sso_crest.json`), trim = max(0, peak). HANDOFF.md › Gain stage.
+  calibrated level + the map's `<Dynamics crest>` (14.5 dB, `sso_crest.json`), trim = max(0, peak); without calibration or crest the old S'. Nothing else lowers the other patches. HANDOFF.md › Gain stage.
 - **Low cut on string sections** (`[levels] lowCut` 2 in Recommended, 1 the fixed cut, 0 in Library default): every patch of
   SSO's five string sections plays through a 4th-order Butterworth high-pass at the map's `<Instrument lowCut>` (Violins 150
   Hz, Violas 100, Celli 50, Basses 25; `gen_spitfire_sso.py` LOW_CUT): `Vst3Synth::setLowCut` / `setExportLowCut` (from
@@ -370,7 +377,7 @@ changes one tick after their chord; the technique comes from the notation.
   (`libmscore/guitarplayback.cpp`, its header is the design), over parts whose patch has the map's `<Guitar>`: strums, string keys,
   capo, harmonics, slides, HO / PO, FX noises; settings `[guitar] strums` / `softStrums` / `pinchHarmonics` (0; not in Recommended).
 - **Microtones**: Kontakt ignores VST 3 note tuning. **Tuning lanes** (patch copies per tuning, metaTag `soundLibraryLanes`)
-  play by **varispeed** (`Vst3Plugin::setPitch`) or by **pitch bend** where the patch bends cleanly (`<Instrument bend>`).
+  play by **varispeed** (`Vst3Plugin::setPitch`) or by **pitch bend** where the patch bends cleanly (`<Instrument bend>`; varispeed can't reach Live).
   **Every copy the music needs** (the owner: "2"): a maximum only where the map, `[tuning] maxLanes` or the score's
   `soundLibraryLanes` sets one; memory only warns (`SoundLib::copiesMemory`, `checkCopiesMemory`, `MS_FREE_MEMORY_MB`). A
   legato transition's bend glides with the transition's own pitch (map `bendGlide`, `bendSmoothing`, `libraryPitchBends`,
@@ -378,7 +385,7 @@ changes one tick after their chord; the technique comes from the notation.
   microtones"): `SoundLib::routes(…, forLive)` / `lanes(…, fixedTuning)` give a patch without `bend=` a fixed copy per tuning
   (`Lanes::fixed`, `Route::cents`), tuned by Kontakt's instrument Tune (`KontaktSetup::withTune`); the plain set gives a
   patch's copies one Kontakt multi (`PlainLiveSet::multis`, `KontaktSetup::withSlots`), a bending patch's copies their bends
-  as the clip's pitch-bend envelope (LIVE.md › The plain set › Microtones). **Hosted, the same** (`[tuning] hostedTuning` 1
+  as the clip's pitch-bend envelope, written as hold pairs (Live ramps between points) (LIVE.md › The plain set › Microtones). **Hosted, the same** (`[tuning] hostedTuning` 1
   slots, 0 varispeed; the owner: "Whence takes absolutely forever to load all the patches"): `SoundLib::hostedSlots` /
   `SoundLib::instances` put a patch's copies of one part in ONE instance, a slot per copy tuned by Tune on its own MIDI channel
   (`SoundLibraryHost::tunedState`, `Vst3Synth::setLink`); a setup that isn't Kontakt's falls back to varispeed
@@ -421,7 +428,8 @@ changes one tick after their chord; the technique comes from the notation.
   growing (`MS_BACKGROUND_LOAD_WAIT`); even levels' background measurer doesn't wait yet.
   **Loading never holds the window** (a fix; header of soundlibraryhost.h; the owner: "just have the playback button grayed
   out during it"): every hosted setState runs on a worker thread (`startSetState`, `parallelLoads()` = max(1,
-  `io/soundLibraryLoadThreads`)); Play never loads: `readyToPlay` is true when every instance is loaded, else starts the
+  `io/soundLibraryLoadThreads`)); the instance is made, settled, resaved and slotted on the GUI thread (made on a worker it hung
+  Kontakt); Play never loads: `readyToPlay` is true when every instance is loaded, else starts the
   background load and returns; `loading()` grays Play while stopped, status bar "Loading sounds: n of m…"; an edit
   (`scoreEdited`, 1 s debounce) loads new patches it needs; a change that stopped playback plays on once loaded
   (`whenLoaded`). Only `sync` still waits (audio export, tests). Test `tst_liveequivalence::asyncLoadHosted`.
@@ -452,7 +460,7 @@ changes one tick after their chord; the technique comes from the notation.
   (`audiodrivers/pa.cpp`) logs each play's callbacks.
 - **Setups are made by MuseScore** from each patch's `.nki` (`audio/vst3/kontaktsetup.*`), then replaced by Kontakt's own state
   after the first load (`resave`); the states loaded (voice limit 512, the copies' Tune slots) are **prepared once** and kept byte
-  for byte (`prepared` in soundlibraryhost.cpp). Setups folder `<dataPath>/soundlibraries/<library>/`: `<patch>.vst3state`,
+  for byte, in memory and `<setups folder>/prepared` (`prepared` in soundlibraryhost.cpp). Setups folder `<dataPath>/soundlibraries/<library>/`: `<patch>.vst3state`,
   `Kontakt empty.vst3state`, `made setups.json` (`MAKER_VERSION`), `checks.json` (raise `CHECK_VERSION` in soundlibrarycheck.cpp
   when old results go stale), `dynamics.json`, `load times.log` (qDebug doesn't show on Windows).
 - Background jobs (own setups copy, lock, log; `.bat` files in `bin` only with `-DMSCORE_INSTALL_MEASUREMENT_SCRIPTS=ON`):
@@ -508,7 +516,8 @@ catch a wrong model).
 ### Edit lag
 
 After an edit only what changed is rendered on the main thread (HANDOFF.md › Edit lag): `ContextLevel::volumes` / `masterTrim` keep
-the last 8 results per score (`RecentResults`, recentresults.h), `NoteLane::onPerformancePatch` keeps its answers, and `EditWarmup`
+the last 8 results per score (`RecentResults`, recentresults.h; even levels written outside the undo stack,
+`MasterScore::setEvenLevelsWritten`, count in `EvenLevels::generation`), `NoteLane::onPerformancePatch` keeps its answers, and `EditWarmup`
 (mscore/editwarmup.h) makes the edit's real-range and master-trim renders one chunk per event-loop pass while stopped. Rule (the
 owner): sound-identical or dropped; prove changes here with `editLagIdentical` and before/after `dumpEvents`; `MS_EDIT_LAG_OFF=1`
 turns the speedups off.
@@ -571,8 +580,8 @@ the Lua standalone check.
 - `tst_soundlibrary`: 169 passed, 7 skipped with the default helpers (`vst3UnloadModules` skips with helpers), 170 passed,
   6 skipped in-process (`MS_VST3_HOST_PROCESSES=0`). The skips need the owner's files: `MS_ROUTES_SCORE`, `SSO_NKI` /
   `SSO_EMPTY`, `MS_EXTRACT_PLUGIN` + `MS_EXTRACT_OUT`; `SSO_KICKSTART_NKI` extends two Kontakt tests;
-  `playbackVerifyRegression` needs `MS_VERIFY_REGRESSION` (VERIFY.md › Detector regression). The tests' ini pins settings
-  `Playback::setIniValuesForTest` leaves at 0 (e.g. plainPerformance, lowCut 1), so older tests keep their expectations.
+  `playbackVerifyRegression` needs `MS_VERIFY_REGRESSION` (VERIFY.md › Detector regression). `Playback::setIniValuesForTest`
+  pins some settings unless a test sets them (plainPerformance 0, lowCut 1), so older tests keep their expectations.
 - `tst_playbackaudit`: 14 passed, 1 skipped (`auditScore` needs `MS_AUDIT_SCORE`: VERIFY.md › Playback audit). Baseline, Whence
   (quarter tones), Recommended, 2026-10-29: ARRIVAL 33 fail / 7 warn, LEVEL STEP 26 info, every other kind 0 (the heard check on
   the real sound, build 491: 35 fail / 19 warn).
