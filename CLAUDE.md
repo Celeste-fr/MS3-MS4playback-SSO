@@ -113,7 +113,7 @@ Part 1; the dated narratives and superseded values behind the items below: docs/
 `rendermidi.cpp` (`collectMeasureEventsMs4`, `renderMs4Dynamics`; dynamics method 3 is the default),
 `thirdparty/fluidsynth`, `effects/musereverb`, `synthesizerstate.cpp`. One deliberate difference: an MS3 hairpin with its
 own velocity change plays as in 3.6 (`ms3HairpinVelocity()`, preference `application/playback/ms3HairpinVelocityChange`;
-`MS4_STRICT=1` disables; `ab/trace/regress.sh` sets it).
+`MS4_STRICT=1` disables; `~/MuseScore/ms3fork/ab/trace/regress.sh`, outside the repo, sets it).
 `mscore/playbackmode.h` (MS3 / MS4 / each library engine by name, all parts) and `libmscore/partplayback.h` (per part,
 metaTag `partPlayback`: "library:<engine>" a part's own library, an old "library" the global one).
 - **Engine lane** (`libmscore/enginelane.h`; HANDOFF.md › Engine lane): an automation lane "engine" per part (MS3 / MS4 /
