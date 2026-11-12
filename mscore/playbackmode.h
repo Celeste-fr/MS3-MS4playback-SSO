@@ -34,8 +34,27 @@
 //   plays in its place where Preferences › I/O › Sound library picks it (preference io/soundLibraryVariants: Vial
 //   Instrumental's "Fuse", Vial Fuse.vst3's mic mixers). An engine whose plug-in isn't found (hosted), or any but the
 //   global library over MIDI out, is grayed, its tooltip saying why
+//
+//   A score's mode (the owner, 2026-10-31: "it should be loaded with ms3 or ms4 depending on which ver it's from"; before,
+//   the global mode stayed whatever was chosen last): opening a score file sets the global mode by where it comes from,
+//   and each score keeps its mode while it is open, so switching tabs plays each score in its own:
+//   - the score's metaTag "playbackMode" ("ms3", "library:<engine>"; MS4, the default, left out), written by this fork:
+//     the global mode the score last had in it (recordScorePlaybackMode at every switch, so a save writes it; 3.6 keeps
+//     metaTags through a round trip). An engine not found here leaves the global mode as it is;
+//   - else a file of MuseScore 4 (version >= 400, opened as too new): MS4;
+//   - else a file this fork saved before the metaTag (programVersion 3.6.3 or later: 3.6.2 was MuseScore 3's last; or a
+//     metaTag only the fork writes, partPlayback / playbackSettings / automation / trackDelays …): MS4, the fork's own;
+//   - else (MuseScore 3.6 or older, 1.x / 2.x too): MS3.
+//   Noted at open (notePlaybackModeAtOpen, MuseScore::openScore: .mscz / .mscx only), put in the metaTag when the score
+//   is first shown; a new score or an import takes the global mode it is first shown in. Showing a score
+//   (MuseScore::setCurrentScoreView) switches the global mode only when it differs from the score's
+//   (applyScorePlaybackMode): the same mode loads nothing again. A part's own mode (partplayback.h) and its Engine lane
+//   (enginelane.h) play over it as before. Command-line conversions show no score: their files keep the metaTag as read
+//   (the round trip through 3.6). An MS4 score of the fork without any fork metaTag, saved by 3.6.2 (programVersion
+//   3.6.2), opens as MuseScore 3's
 //---------------------------------------------------------
 
+#include <functional>
 #include <map>
 #include <vector>
 
@@ -45,6 +64,8 @@
 
 namespace Ms {
 
+class MasterScore;
+
 enum class PlaybackMode : char { MS3, MS4, LIBRARY };
 
 PlaybackMode playbackMode();
@@ -53,6 +74,19 @@ void setPlaybackMode(PlaybackMode mode);
 void setPlaybackMode(PlaybackMode mode, const QString& engine);
 QString playbackModeName(PlaybackMode mode);
 QString soundLibraryPath();         // the library the LIBRARY mode plays (the last one used …)
+
+// a score's mode (above): the metaTag, its text for the global mode ("ms3", "ms4", "library:<engine>"), the mode a
+// score file opens with, as text (empty: a new score or an import, none)
+extern const char* const SCORE_PLAYBACK_MODE_TAG;
+QString playbackModeText();
+QString openingPlaybackMode(const MasterScore* score);
+// at open (score files): the mode the score opens with, noted
+void notePlaybackModeAtOpen(MasterScore* score);
+// the score shown: the global mode switched to the score's where it differs (true: switched); set: the switch (tests)
+bool applyScorePlaybackMode(MasterScore* score,
+                            const std::function<void(PlaybackMode, const QString&)>& set = std::function<void(PlaybackMode, const QString&)>());
+// the global mode into the score's metaTag (once its mode is known: shown or opened)
+void recordScorePlaybackMode(MasterScore* score);
 
 // the sound library engines: the maps that come with MuseScore and the preference's elsewhere, by engine
 struct SoundEngine {

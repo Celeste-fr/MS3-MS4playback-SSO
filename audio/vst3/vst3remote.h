@@ -31,7 +31,9 @@
 //              semaphore wakes the helper's audio thread (MMCSS "Pro Audio" on Windows), another the caller.
 //              Synchronous: the block is rendered within the caller's process(), no added latency; Vst3Synth posts
 //              every slot's block first (beginProcess) and collects them in slot order, so the helpers render a block
-//              at the same time and the slots are summed exactly as before (0 + x = x, then the same adds)
+//              at the same time and the slots are summed exactly as before (0 + x = x, then the same adds). A load's
+//              settle (REQ_SETTLE) runs on the helper's settle thread, not its audio thread, so a loading instance never
+//              holds up the blocks of the others in its helper (helper-stall, 2026-10-27: VM ~2.6 s callback stalls)
 //
 //  Setting [soundlibrary] hostProcesses (MS_VST3_HOST_PROCESSES wins): 0 in MuseScore's process (as before), K > 0 up to K
 //  helpers, -1 (the default) automatic: one helper per physical core but one (at least 2 where there are 2 or more cores
