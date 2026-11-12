@@ -1553,6 +1553,8 @@ void MuseScore::updatePlaybackMode()
       library->setChecked(mode == PlaybackMode::LIBRARY);
       library->setText(playbackModeName(PlaybackMode::LIBRARY));
       PlaybackModeBox::updateAll();
+      if (cs)
+            recordScorePlaybackMode(cs->masterScore());     // (the score keeps the mode it plays in: playbackmode.h)
       }
 
 //---------------------------------------------------------
@@ -3485,6 +3487,9 @@ void MuseScore::setCurrentScoreView(ScoreView* view)
             updatePlayMode();
             }
 
+      // (the score's own playback mode: switched only where it differs; playbackmode.h)
+      if (cs)
+            applyScorePlaybackMode(cs->masterScore());
       if (seq)
             seq->setScoreView(cv);
       SoundLibraryHost::instance()->preloadSoon(cs);    // the sound library's instances, ahead of play

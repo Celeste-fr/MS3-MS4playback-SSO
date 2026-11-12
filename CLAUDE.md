@@ -114,7 +114,9 @@ Part 1; the dated narratives and superseded values behind the items below: docs/
 `thirdparty/fluidsynth`, `effects/musereverb`, `synthesizerstate.cpp`. One deliberate difference: an MS3 hairpin with its
 own velocity change plays as in 3.6 (`ms3HairpinVelocity()`, preference `application/playback/ms3HairpinVelocityChange`;
 `MS4_STRICT=1` disables; `~/MuseScore/ms3fork/ab/trace/regress.sh`, outside the repo, sets it).
-`mscore/playbackmode.h` (MS3 / MS4 / each library engine by name, all parts) and `libmscore/partplayback.h` (per part,
+`mscore/playbackmode.h` (MS3 / MS4 / each library engine by name, all parts; **a score file opens in its own mode**, the owner 2026-10-31: metaTag
+`playbackMode` ("ms3" / "library:<engine>", MS4 left out), else MuseScore 4's file MS4, the fork's (programVersion >= 3.6.3
+or a fork metaTag) MS4, MuseScore 3.6 or older MS3; each open score keeps its mode over tab switches: `applyScorePlaybackMode`) and `libmscore/partplayback.h` (per part,
 metaTag `partPlayback`: "library:<engine>" a part's own library, an old "library" the global one).
 - **Engine lane** (`libmscore/enginelane.h`; HANDOFF.md › Engine lane): an automation lane "engine" per part (MS3 / MS4 /
   a library, steps); each note plays on the engine at its tick, legato never across a switch, a lane's library loaded for
@@ -442,8 +444,9 @@ changes one tick after their chord; the technique comes from the notation.
   and two semaphores, no added latency. A helper that dies, or doesn't answer a block for 15 s (`HUNG_MS`), plays silence; a load call (create, setState) not answered for 300 s (`loadHungMs`, `MS_VST3_LOAD_HUNG_MS`) ends the helper, logs "hung" in load times.log and isn't loaded again until restart; Play, the preload and `loading()` wait only for loads the score still needs (`neededPending`: the mode box set to MS4 mid-load leaves Play free);
   `SoundLibraryHost::checkHostProcesses` says so, reloads the instances in a new helper and plays on; a patch whose helper
   ended `MAX_HELPER_ENDS` (3) times isn't reloaded. No helper can start: in-process, logged. Offline renders use helpers too;
-  kthost always hosts in-process. Live and MIDI out unchanged. Open: a ~2.6 s audio-callback stall per helper start while
-  stopped. Untried: Ample and the editor window in a helper.
+  kthost always hosts in-process. Live and MIDI out unchanged. A load's settle (REQ_SETTLE) runs on
+  the helper's own settle thread, never its audio thread (there it held up the other instances' blocks: the ~2.6 s
+  callback stall while loading; `tst_soundlibrary::remoteNoStall`). Untried: Ample and the editor window in a helper.
 - **Render ahead** (header of `mscore/seq.h`, engine `mscore/renderahead.h`; the owner approved; docs/PLAYBACK_SETTINGS.md ›
   Render ahead): `[soundlibrary] renderAhead` 500 ms (`MS_RENDER_AHEAD` wins; 0 = the callback renders). One producer thread
   (MMCSS Pro Audio / SCHED_FIFO, never a kheap LoadScope) runs `Seq::processDirect` for every block, so the audio is
@@ -577,8 +580,8 @@ Last recorded counts (with init and cleanup; the date of each is in the commit t
 "Moved from CLAUDE.md, 2026-11-11"). Say which you ran; nothing here was re-run on the Linux dev machine for this file except
 the Lua standalone check.
 
-- `tst_soundlibrary`: 169 passed, 7 skipped with the default helpers (`vst3UnloadModules` skips with helpers), 170 passed,
-  6 skipped in-process (`MS_VST3_HOST_PROCESSES=0`). The skips need the owner's files: `MS_ROUTES_SCORE`, `SSO_NKI` /
+- `tst_soundlibrary`: 170 passed, 7 skipped with the default helpers (2026-11-12, with remoteNoStall; `vst3UnloadModules` skips with helpers); in-process
+  (`MS_VST3_HOST_PROCESSES=0`) 170 passed, 6 skipped before remoteNoStall (not re-run). The skips need the owner's files: `MS_ROUTES_SCORE`, `SSO_NKI` /
   `SSO_EMPTY`, `MS_EXTRACT_PLUGIN` + `MS_EXTRACT_OUT`; `SSO_KICKSTART_NKI` extends two Kontakt tests;
   `playbackVerifyRegression` needs `MS_VERIFY_REGRESSION` (VERIFY.md › Detector regression). `Playback::setIniValuesForTest`
   pins some settings unless a test sets them (plainPerformance 0, lowCut 1), so older tests keep their expectations.
@@ -589,7 +592,7 @@ the Lua standalone check.
   `dumpEvents`, `utilitySet`, `scriptValuesSet`, `chunkCompare`; `twoLibraries` without `MS_VIAL_VST3`). `dumpEvents` takes
   `MS_DUMP_SCORE`, `MS_DUMP_MAP`, `MS_DUMP_OUT`, `MS_DUMP_SETTINGS`, `MS_DUMP_CHUNKED` (renders as playback does), `MS_DUMP_LIVE`
   (as Live's clips, plus kontakts.txt / routes.txt / multis.txt), `MS_DUMP_TIMING`; every dump writes routemap.txt and
-  tunings.txt. `tst_liveintegration` 71 (pictures with `MS_LEADING_PNG`, `MS_LANE_PNG`, `MS_SOUND_LIBRARY_PNG`,
+  tunings.txt. `tst_liveintegration` 72 (2026-11-12, with scorePlaybackMode; pictures with `MS_LEADING_PNG`, `MS_LANE_PNG`, `MS_SOUND_LIBRARY_PNG`,
   `MS_CLIPBANDS_PNG`, `MS_CLIP_TEMPO_PNG`).
 - `tst_keysig` 8, `tst_tuning` 18, `tst_phrasemark` 19, `tst_marcatolevel` 14, `tst_performancetechnique` 26, `tst_tempochange`
   4, `tst_timesig` 14, `tst_playability` 61 passed, 2 skipped (`speed` needs `PLAYABILITY_BIG`, `dump` `PLAYABILITY_DUMP`; run 2026-11-11),

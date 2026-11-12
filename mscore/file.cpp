@@ -22,6 +22,7 @@
 #include "globals.h"
 #include "instrdialog.h"
 #include "musescore.h"
+#include "playbackmode.h"
 #include "newwizard.h"
 #include "palette.h"
 #include "playpanel.h"
@@ -403,6 +404,11 @@ Score* MuseScore::openScore(const QString& fn, bool switchTab, const bool consid
 
       MasterScore* score = readScore(fn);
       if (score) {
+            // (a score file plays in the mode it comes from: its metaTag, MuseScore 4's, the fork's, else MuseScore 3's;
+            // playbackmode.h. An import takes the global mode as it is)
+            const QString suffix = fi.suffix().toLower();
+            if (suffix == "mscz" || suffix == "mscx")
+                  notePlaybackModeAtOpen(score);
             if (!name.isEmpty())
                   score->masterScore()->fileInfo()->setFile(name);
                   // TODO: what if that path is no longer valid?
