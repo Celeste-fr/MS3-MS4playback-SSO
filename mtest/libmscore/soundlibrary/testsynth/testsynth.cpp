@@ -91,6 +91,8 @@ struct Voice {
 // MSTESTSYNTH_STREAM_MS    then its "samples" load on a thread of its own for that long: notes started
 //                          meanwhile play nothing;
 // MSTESTSYNTH_STREAM_MB    and the process grows by that much meanwhile (freed with the instance);
+// MSTESTSYNTH_KONTAKT_SETSTATE_MS  setState of a Kontakt state (a setup MuseScore made from an .nki) takes that long
+//                          more: a first load of a made setup that hangs (the owner's, 2026-11-11);
 // MSTESTSYNTH_INIT_MS      like a sampler's own script (Kontakt's KSP: SSO's patches), that initialises
 //                          once its engine has run that long after setState and puts the patch's own
 //                          values back: "Tone" set before then is lost (100 % again), set after it holds
@@ -373,6 +375,8 @@ class Processor : public AudioEffect {
             const int initMs = envInt("MSTESTSYNTH_INIT_MS");
             initLeft = initMs > 0 ? long(initMs * processSetup.sampleRate / 1000) : -1;
             if (all.size() >= 16 && std::memcmp(all.data() + 12, "hsin", 4) == 0) {
+                  if (const int ms = envInt("MSTESTSYNTH_KONTAKT_SETSTATE_MS"))
+                        std::this_thread::sleep_for(std::chrono::milliseconds(ms));
                   kontakt = all;
                   stream();
                   return kResultOk;

@@ -179,6 +179,11 @@ std::vector<qint64> processIds();   // theirs (tests: a helper killed)
 void setLog(std::function<void(const QString&)> log);
 // helpers that ended without being told to (crashed, killed) since the last call, by index
 std::vector<int> takeEnded();
+// a load call (LOAD, SET_STATE, STATE, DESCRIBE …) a helper didn't answer within loadHungMs(): the helper is ended, as an
+// audio block's HUNG_MS ends one, so that the load ends (failed) instead of MuseScore waiting for it for ever. The key
+// (the patch) whose call hung is kept until taken: true once per hang
+bool takeHung(const QString& key);
+int loadHungMs();                   // 300 000 ms (the slowest first load logged, 11 s, x 25); MS_VST3_LOAD_HUNG_MS sets it (the tests)
 
 // audio round trips (REQ_PROCESS): the caller's wait less the helper's own process() time, per block. One line: blocks,
 // median / p99 / max µs of the overhead and of the whole round trip (MS_AUDIO_TIMING's line, pa.cpp). reset: cleared

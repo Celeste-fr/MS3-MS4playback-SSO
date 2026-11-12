@@ -330,6 +330,10 @@ static constexpr size_t SEM_SPACE = sizeof(sem_t);
 
 static constexpr int HUNG_MS = 15000;
 static constexpr int HUNG_STEP_MS = 250;
+// a load call unanswered this long ends its helper (loadHungMs): Kontakt's slowest first load of an SSO patch measured
+// 2-40 s (the made setups' first loads, soundlibraryhost.cpp); the owner's hung load, 2026-11-11, never answered (he
+// restarted after 2 min)
+static constexpr int LOAD_HUNG_MS = 300000;
 
 static qint64 nowNs()
       {
@@ -584,6 +588,7 @@ class Process {
       quint32 nextSeq { 0 };
       std::map<quint32, std::shared_ptr<Waiter>> waiting;
       std::atomic<int> longOps { 0 };
+      QString hungWhy;                    // (waitMutex) a load call that didn't answer: why it was ended
 
       ~Process();
       bool start(const QString& exe, const QString& prewarm, QString* error);
@@ -632,6 +637,39 @@ struct Instance::Impl {
             return wait();
             }
       };
+
+// the load calls a hung helper is ended for (loadHungMs); not DESTROY (the quit's own wait: ~Process) nor BACKGROUND_WAIT
+// (its own limit, the map's <Plugin backgroundLoad>)
+static bool hangLimited(Op op)
+      {
+      switch (op) {
+            case Op::LOAD:
+            case Op::SET_STATE:
+            case Op::STATE:
+            case Op::DESCRIBE:
+            case Op::SET_OFFLINE:
+            case Op::SET_SAMPLE_RATE:
+                  return true;
+            default:
+                  return false;
+            }
+      }
+
+static std::mutex s_hungMutex;
+static std::set<QString> s_hung;
+
+int loadHungMs()
+      {
+      bool ok = false;
+      const int v = qEnvironmentVariableIntValue("MS_VST3_LOAD_HUNG_MS", &ok);
+      return ok && v > 0 ? v : LOAD_HUNG_MS;
+      }
+
+bool takeHung(const QString& key)
+      {
+      std::lock_guard<std::mutex> lock(s_hungMutex);
+      return s_hung.erase(key) > 0;
+      }
 
 static std::mutex& registryMutex()
       {
@@ -856,9 +894,9 @@ void Process::lost()
 
 void Process::died(const QString& how)
       {
-      exitText = how;
       {
             std::lock_guard<std::mutex> lock(waitMutex);
+            exitText = hungWhy.isEmpty() ? how : QString("%1; %2").arg(hungWhy, how);
             dead = true;
             exited = true;
             waitCv.notify_all();
@@ -940,6 +978,29 @@ bool Process::send(Op op, quint32 id, const QByteArray& args, QByteArray* reply,
       if (!wait)
             return true;
       std::unique_lock<std::mutex> lock(waitMutex);
+      // (a load call unanswered for loadHungMs(): the helper is ended, its load fails, MuseScore goes on: the owner's hung
+      // first load of a made setup, 2026-11-11, kept Play grayed until he restarted)
+      const int limit = hangLimited(op) ? loadHungMs() : 0;
+      if (limit > 0 && !waitCv.wait_for(lock, std::chrono::milliseconds(limit), [&]() { return w->done || dead.load(); })) {
+            QString key;
+            {
+                  std::lock_guard<std::mutex> il(instMutex);
+                  for (const Instance::Impl* i : instances)
+                        if (i->id == id)
+                              key = i->key;
+            }
+            hungWhy = QString("%1 of %2 not answered in %3 s").arg(opName(op), key.isEmpty() ? QString("an instance") : key)
+                      .arg(limit / 1000.0);
+            lock.unlock();
+            {
+                  std::lock_guard<std::mutex> hl(s_hungMutex);
+                  if (!key.isEmpty())
+                        s_hung.insert(key);
+            }
+            log(QString("helper %1 (pid %2): %3: ended").arg(index).arg(childPid).arg(hungWhy));
+            kill();                       // (died() follows from its watcher: every waiter woken)
+            lock.lock();
+            }
       waitCv.wait(lock, [&]() { return w->done || dead.load(); });
       if (!w->done)
             return false;

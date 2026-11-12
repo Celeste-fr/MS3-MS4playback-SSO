@@ -132,6 +132,7 @@ class TestLiveEquivalence : public QObject, public MTest
       Q_OBJECT
 
    public:
+      void libraryChangeDuringHungLoad(int helpers);    // (libraryChangeDuringLoad's made-setup row)
       std::shared_ptr<SoundLib::Library> loadMap(const QString& xml)
             {
             QTemporaryFile f;
@@ -170,6 +171,8 @@ class TestLiveEquivalence : public QObject, public MTest
       void backgroundLoadHosted();
       void asyncLoadHosted();
       void hostCrashRecovery();
+      void libraryChangeDuringLoad_data();
+      void libraryChangeDuringLoad();
       void plainSetTrackDelays();
       void plainWritten_data();
       void plainWritten();
@@ -2278,6 +2281,306 @@ void TestLiveEquivalence::hostCrashRecovery()
             }
       delete score;
 #endif
+      }
+
+//---------------------------------------------------------
+//   libraryChangeDuringLoad
+//    the owner, 2026-11-11 (Windows, Kontakt + SSO): "if change playback library during sso loading, cannot playback
+//    until restart software". The global playback library changed (another engine: SoundLib::setCurrent, as
+//    updateSoundLibrary does; MS4: the library no longer the parts' default, PartPlaybackModes::setLibraryDefault; and
+//    back) while the score's patches load in the background: each time the loading ends, Play (readyToPlay) becomes
+//    ready, whenLoaded's callback comes, and the parts that play the library sound. In MuseScore's process and in helpers
+//---------------------------------------------------------
+
+void TestLiveEquivalence::libraryChangeDuringLoad_data()
+      {
+      QTest::addColumn<int>("helpers");
+      QTest::addColumn<bool>("made");
+      QTest::newRow("in-process") << 0 << false;
+#ifndef _WIN32
+      QTest::newRow("helpers") << 2 << false;
+      // the owner's log (2026-11-11): a patch's first load, its setup just made from the .nki, never finished in its new
+      // helper (no "a new instance", no batch summary), and Play stayed grayed after MS4 was chosen, until a restart
+      QTest::newRow("made setup hangs, helpers") << 2 << true;
+#endif
+      }
+
+void TestLiveEquivalence::libraryChangeDuringLoad()
+      {
+      QFETCH(int, helpers);
+      QFETCH(bool, made);
+      if (made) {
+            libraryChangeDuringHungLoad(helpers);
+            return;
+            }
+      struct Env {
+            QByteArray was = qgetenv("MS_VST3_HOST_PROCESSES");
+            bool had = qEnvironmentVariableIsSet("MS_VST3_HOST_PROCESSES");
+            ~Env() {
+                  qunsetenv("MSTESTSYNTH_SETSTATE_MS");
+                  PartPlaybackModes::setLibraryDefault(true);
+                  Vst3Remote::shutdown();
+                  if (had) qputenv("MS_VST3_HOST_PROCESSES", was); else qunsetenv("MS_VST3_HOST_PROCESSES");
+                  }
+            } env;
+      Vst3Remote::shutdown();
+      qputenv("MS_VST3_HOST_PROCESSES", QByteArray::number(helpers));
+      const QString instruments =
+            "<Instrument name='Violin' ids='violin'><Articulation name='Long' value='1' techniques='long legato'/></Instrument>"
+            "<Instrument name='Viola' ids='viola'><Articulation name='Long' value='1' techniques='long legato'/></Instrument>";
+      LiveHost host(this, "", { "Violin", "Viola" },
+                    "<SoundLibrary name='ChangeA'><Switch type='cc' number='32'/><Dynamics cc='1'/>" + instruments + "</SoundLibrary>");
+      QVERIFY(host.ok);
+      std::shared_ptr<const SoundLib::Library> libA = host.lib;
+      // (B's patches named otherwise: another engine's instances never fit A's slots, as SSO's and Vial's plug-ins differ)
+      QString instrumentsB = instruments;
+      instrumentsB.replace("name='Violin'", "name='Violin B'").replace("name='Viola'", "name='Viola B'");
+      std::shared_ptr<SoundLib::Library> libB = loadMap("<SoundLibrary name='ChangeB'><Switch type='cc' number='32'/><Dynamics cc='1'/>"
+                                                        + instrumentsB + "</SoundLibrary>");
+      QVERIFY(libB);
+      {
+            QString error;
+            std::unique_ptr<Vst3Plugin> p = Vst3Plugin::load(TESTSYNTH, 48000, 4096, &error);
+            QVERIFY2(p, qPrintable(error));
+            const QByteArray state = p->state();
+            QDir().mkpath(SoundLibraryHost::setupsFolder(*libB));
+            for (const QString& patch : { QString("Violin B"), QString("Viola B") }) {
+                  QFile f(SoundLibraryHost::setupFile(*libB, patch));
+                  QVERIFY(f.open(QIODevice::WriteOnly) && f.write(state) == state.size());
+                  }
+      }
+      MasterScore* score = readScore(DIR + "section-balance.musicxml");
+      QVERIFY(score);
+      score->rebuildMidiMapping();
+      qputenv("MSTESTSYNTH_SETSTATE_MS", "600");
+      MasterSynthesizer master;
+      master.registerSynthesizer(new Vst3Synth);
+      MasterSynthesizer* was = synti;
+      synti = &master;
+      struct Back { MasterSynthesizer* was; MasterScore* s; ~Back() { SoundLibraryHost::instance()->release(); synti = was; delete s; } }
+            back { was, score };
+      SoundLibraryHost* h = SoundLibraryHost::instance();
+      h->release();
+      auto sounds = [h, score]() {
+            Vst3Synth* s = h->synth();
+            std::set<int> used;
+            for (Part* p : score->parts())
+                  for (int k : h->slotsOf(p))
+                        if (h->loaded(k))
+                              used.insert(k);
+            if (used.size() != score->parts().size())
+                  return false;
+            s->beginExport(48000);
+            for (int ch : used) {
+                  s->play(PlayEvent(ME_CONTROLLER, ch, 1, 100));
+                  s->play(PlayEvent(ME_NOTEON, ch, 62 + 7 * ch, 100));
+                  }
+            std::vector<float> b(2 * 4800, 0.f);
+            s->process(4800, b.data(), nullptr, nullptr);
+            for (int ch : used)
+                  s->play(PlayEvent(ME_NOTEON, ch, 62 + 7 * ch, 0));
+            std::vector<float> rest(2 * 48000, 0.f);
+            s->process(48000, rest.data(), nullptr, nullptr);
+            s->endExport();
+            return rms(b, 0) > 1e-4;
+            };
+      // Play as the user presses it once it isn't grayed (Seq::start: readyToPlay), until it plays or 15 s
+      auto playWhenReady = [h, score](int* whenLoadedCalls) {
+            QElapsedTimer t;
+            t.start();
+            QString error;
+            if (whenLoadedCalls)
+                  h->whenLoaded(score, [whenLoadedCalls]() { ++*whenLoadedCalls; });
+            while (t.elapsed() < 15000) {
+                  QCoreApplication::processEvents(QEventLoop::AllEvents, 5);
+                  if (!h->loading(score) && h->readyToPlay(score, &error))
+                        return true;
+                  }
+            return false;
+            };
+      auto midLoad = [h, score](int ms) {
+            QElapsedTimer t;
+            t.start();
+            while (t.elapsed() < ms)
+                  QCoreApplication::processEvents(QEventLoop::AllEvents, 5);
+            return h->loading(score);
+            };
+
+      // 1. another engine while the first's patches load (A -> B)
+      h->preloadSoon(score);
+      QVERIFY(midLoad(100));
+      SoundLib::setCurrent(libB);
+      int calls = 0;
+      QVERIFY2(playWhenReady(&calls), "A -> B: Play never became ready");
+      QTest::qWait(20);
+      QCOMPARE(calls, 1);
+      QVERIFY2(sounds(), "A -> B: silent");
+
+      // 2. MS4 while B's patches load again (after a release)
+      h->release();
+      h->preloadSoon(score);
+      QVERIFY(midLoad(100));
+      PartPlaybackModes::setLibraryDefault(false);
+      SoundLib::routesChanged();
+      QVERIFY2(playWhenReady(nullptr), "B -> MS4: Play never became ready");
+      for (Part* p : score->parts())
+            QVERIFY(h->slotsOf(p).empty());
+
+      // 3. back to the library (Play loads it), and to A while it loads
+      PartPlaybackModes::setLibraryDefault(true);
+      SoundLib::routesChanged();
+      QString error;
+      QVERIFY(!h->readyToPlay(score, &error));
+      QVERIFY(midLoad(100));
+      SoundLib::setCurrent(libA);
+      calls = 0;
+      QVERIFY2(playWhenReady(&calls), "MS4 -> B -> A: Play never became ready");
+      QTest::qWait(20);
+      QCOMPARE(calls, 1);
+      QVERIFY2(sounds(), "MS4 -> B -> A: silent");
+
+      // 4. to MS4 and straight back while A loads
+      h->release();
+      h->preloadSoon(score);
+      QVERIFY(midLoad(100));
+      PartPlaybackModes::setLibraryDefault(false);
+      SoundLib::routesChanged();
+      // (on MS4 the parts don't play A: its loads no longer hold Play, 2026-11-12)
+      QVERIFY2(!midLoad(50), "MS4 mid-load: a load no longer needed still holds Play");
+      PartPlaybackModes::setLibraryDefault(true);
+      SoundLib::routesChanged();
+      QVERIFY2(playWhenReady(nullptr), "A -> MS4 -> A: Play never became ready");
+      QVERIFY2(sounds(), "A -> MS4 -> A: silent");
+      SoundLib::setCurrent(nullptr);
+      }
+
+//---------------------------------------------------------
+//   libraryChangeDuringHungLoad
+//    libraryChangeDuringLoad's made-setup row: Violin's setup made from the .nki fixture on Kontakt's empty state (as
+//    MuseScore makes SSO's), its first setState in the helper never answering (MSTESTSYNTH_KONTAKT_SETSTATE_MS), Viola
+//    a patch without a setup. MS4 chosen while it hangs: Play ready at once (the load no longer needed holds nothing up);
+//    back to the library: the hung load ends after MS_VST3_LOAD_HUNG_MS (its helper ended, "hung" in load times.log),
+//    Violin given up for the session, Play ready, Viola loaded
+//---------------------------------------------------------
+
+void TestLiveEquivalence::libraryChangeDuringHungLoad(int helpers)
+      {
+      struct Env {
+            QByteArray was = qgetenv("MS_VST3_HOST_PROCESSES");
+            bool had = qEnvironmentVariableIsSet("MS_VST3_HOST_PROCESSES");
+            ~Env() {
+                  qunsetenv("MSTESTSYNTH_KONTAKT_SETSTATE_MS");
+                  qunsetenv("MS_VST3_LOAD_HUNG_MS");
+                  PartPlaybackModes::setLibraryDefault(true);
+                  Vst3Remote::shutdown(true);
+                  if (had) qputenv("MS_VST3_HOST_PROCESSES", was); else qunsetenv("MS_VST3_HOST_PROCESSES");
+                  }
+            } env;
+      Vst3Remote::shutdown();
+      qputenv("MS_VST3_HOST_PROCESSES", QByteArray::number(helpers));
+      LiveHost host(this, "", { "Violin", "Viola" },
+                    "<SoundLibrary name='MadeHang'><Files registry='MadeHang'/><Switch type='cc' number='32'/><Dynamics cc='1'/>"
+                    "<Instrument name='Violin' ids='violin' nki='Violins 2 - All techniques.nki'>"
+                    "<Articulation name='Long' value='1' techniques='long legato'/></Instrument>"
+                    "<Instrument name='Viola' ids='viola'><Articulation name='Long' value='1' techniques='long legato'/></Instrument>"
+                    "</SoundLibrary>");
+      QVERIFY(host.ok);
+      const SoundLib::Library& lib = *host.lib;
+      QVERIFY(SoundLibraryHost::makesSetups(lib));
+      SoundLibraryHost::setLibraryFolder(lib, root + "/" + DIR + "kontakt");
+      QVERIFY(SoundLibraryHost::hasSetup(lib, "Violin"));
+      QVERIFY(!SoundLibraryHost::hasSetup(lib, "Viola"));
+      QFile::remove(SoundLibraryHost::setupFile(lib, "Violin"));        // (LiveHost's: made from the .nki instead)
+      {
+            QFile e(root + "/" + DIR + "kontakt/empty.bin");
+            QVERIFY(e.open(QIODevice::ReadOnly));
+            QString error;
+            const QString path = SoundLibraryHost::pluginPath(lib, &error);
+            QVERIFY2(!path.isEmpty(), qPrintable(error));
+            QFile f(SoundLibraryHost::setupsFolder(lib) + "/Kontakt empty.vst3state");
+            QVERIFY(f.open(QIODevice::WriteOnly));
+            f.write(Vst3Plugin::joinState("MS Test Synth", e.readAll(), QByteArray()));
+            QJsonObject from;
+            from["plugin"] = path;
+            from["modified"] = QFileInfo(path).lastModified().toUTC().toString(Qt::ISODate);
+            QFile m(SoundLibraryHost::setupsFolder(lib) + "/made setups.json");
+            QVERIFY(m.open(QIODevice::WriteOnly));
+            m.write(QJsonDocument(QJsonObject { { "(empty)", from } }).toJson());
+      }
+      Playback::setIniValuesForTest({});
+      MasterScore* score = readScore(DIR + "section-balance.musicxml");
+      QVERIFY(score);
+      score->rebuildMidiMapping();
+      qputenv("MSTESTSYNTH_KONTAKT_SETSTATE_MS", "600000");
+      qputenv("MS_VST3_LOAD_HUNG_MS", "4000");
+      MasterSynthesizer master;
+      master.registerSynthesizer(new Vst3Synth);
+      MasterSynthesizer* was = synti;
+      synti = &master;
+      struct Back { MasterSynthesizer* was; MasterScore* s; ~Back() { SoundLibraryHost::instance()->release(); synti = was; delete s; } }
+            back { was, score };
+      SoundLibraryHost* h = SoundLibraryHost::instance();
+      h->release();
+      auto playWhenReady = [h, score](int limitMs, qint64* took) {
+            QElapsedTimer t;
+            t.start();
+            QString error;
+            while (t.elapsed() < limitMs) {
+                  QCoreApplication::processEvents(QEventLoop::AllEvents, 5);
+                  if (!h->loading(score) && h->readyToPlay(score, &error)) {
+                        *took = t.elapsed();
+                        return true;
+                        }
+                  }
+            *took = t.elapsed();
+            return false;
+            };
+      auto wait = [](int ms) {
+            QElapsedTimer t;
+            t.start();
+            while (t.elapsed() < ms)
+                  QCoreApplication::processEvents(QEventLoop::AllEvents, 5);
+            };
+      auto partSlot = [h, score](const QString& id) {
+            for (Part* p : score->parts())
+                  if (p->instrument()->getId() == id)
+                        for (int k : h->slotsOf(p))
+                              return k;
+            return -1;
+            };
+
+      // 1. the score opens: Violin's setup made, its first load hangs in a helper
+      h->preloadSoon(score);
+      wait(800);
+      QVERIFY(h->loading(score));
+      QVERIFY(QFileInfo::exists(SoundLibraryHost::setupFile(lib, "Violin")));       // (made)
+
+      // 2. MS4 while it hangs: Play at once, not after the hung load
+      PartPlaybackModes::setLibraryDefault(false);
+      SoundLib::routesChanged();
+      qint64 took = 0;
+      QVERIFY2(playWhenReady(3000, &took), "MS4 during a hung load: Play never became ready");
+      QVERIFY2(took < 2000, qPrintable(QString("MS4: ready only after %1 ms").arg(took)));
+      for (Part* p : score->parts())
+            QVERIFY(h->slotsOf(p).empty());
+
+      // 3. back to the library: the hung load ends (its helper ended), Violin given up, the rest plays
+      PartPlaybackModes::setLibraryDefault(true);
+      SoundLib::routesChanged();
+      QVERIFY2(playWhenReady(20000, &took), "library after a hung load: Play never became ready");
+      const int violin = partSlot("violin");
+      const int viola = partSlot("viola");
+      QVERIFY(violin >= 0 && viola >= 0);
+      QVERIFY2(h->loaded(viola), "Viola not loaded");
+      QVERIFY2(!h->loaded(violin), "Violin's hung load in a slot");
+      QFile log(SoundLibraryHost::setupsFolder(lib) + "/load times.log");
+      QVERIFY(log.open(QIODevice::ReadOnly | QIODevice::Text));
+      const QString text = QString::fromUtf8(log.readAll());
+      QVERIFY2(text.contains("not answered in 4 s"), qPrintable(text.right(2000)));
+      QVERIFY2(text.contains("Violin: its load hung"), qPrintable(text.right(2000)));
+      // 4. Play again: Violin not loaded again (it would hang again), ready at once
+      QVERIFY2(playWhenReady(2000, &took), "Play after the give-up");
+      SoundLib::setCurrent(nullptr);
       }
 
 void TestLiveEquivalence::asyncLoadHosted()

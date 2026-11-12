@@ -139,6 +139,10 @@ class SoundLibraryHost : public QObject {
       void startSetState(Pending* pl, const QByteArray& state, double backgroundLimit);   // on a worker thread
       bool harvest(const SoundLib::Library& library, int keep);   // finished pending loads (keep >= 0: waits till no more are left)
       bool pendingOn(int slot) const;
+      // the loads in flight the score's routes need (slots it plays); a load it no longer needs (the playback mode changed
+      // to MS3 / MS4 while it loaded) finishes in the background as a spare and holds nothing up
+      int neededPending(const MasterScore* score) const;
+      void loadFailed(const SoundLib::Library& library, const QString& patch, const QString& why);
       // a batch of loads (at play, at score open) for load times.log: what each step took, then how
       // long until the process's memory stops growing (Kontakt goes on loading samples after setState)
       struct Batch;

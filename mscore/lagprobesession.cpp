@@ -528,6 +528,35 @@ class Probe : public QObject {
             host->release();
             host->preloadSoon(cs());
             }
+      // phase m: the host's and Play's state in one line
+      QString hostState()
+            {
+            SoundLibraryHost* h = SoundLibraryHost::instance();
+            QAction* play = getAction("play");
+            return QString("mode %1, loading %2, preloading %3, play enabled %4, checked %5, playing %6, seq state %7")
+                   .arg(playbackModeName(playbackMode())).arg(h->loading() ? 1 : 0).arg(h->preloading() ? 1 : 0)
+                   .arg(play && play->isEnabled() ? 1 : 0).arg(play && play->isChecked() ? 1 : 0)
+                   .arg(seq && seq->isPlaying() ? 1 : 0).arg(seq ? (seq->isStopped() ? 0 : 1) : -1);
+            }
+      // phase m: the playback mode box's choice ("ms3", "ms4", "library", "library:<engine>"): the box's own signal when
+      // one is shown (the Play Panel's), else what it calls
+      void chooseMode(const QString& step)
+            {
+            const PlaybackMode mode = step == "ms3" ? PlaybackMode::MS3 : step == "ms4" ? PlaybackMode::MS4 : PlaybackMode::LIBRARY;
+            const QString engine = step.startsWith("library:") ? step.mid(8) : QString();
+            for (PlaybackModeBox* box : mscore->findChildren<PlaybackModeBox*>()) {
+                  for (int i = 0; i < box->count(); ++i) {
+                        if (PlaybackMode(box->itemData(i).toInt()) != mode)
+                              continue;
+                        if (mode == PlaybackMode::LIBRARY && !engine.isEmpty() && box->itemData(i, Qt::UserRole + 1).toString() != engine)
+                              continue;
+                        box->setCurrentIndex(i);
+                        emit box->activated(i);
+                        return;
+                        }
+                  }
+            setPlaybackMode(mode, engine);
+            }
       // the first part's own playback mode (as the Mixer sets it: one undo step, GoOnPlaying)
       QString partMode(PartPlayback mode)
             {
@@ -937,6 +966,35 @@ class Probe : public QObject {
                               }
                         addLoadingRounds(name);
                         add("end " + name, [this]() { endPhase(); }, 1000);
+                        }
+                  else if (p == "m") {
+                        // m: the global playback mode changed in its box while the score's patches load (the owner,
+                        // 2026-11-11: "if change playback library during sso loading, cannot playback until restart
+                        // software"): every patch loaded again as at score open, then each step of MS_LAG_PROBE_MODESEQ
+                        // ("ms4,library" by default; "ms3", "ms4", "library" or "library:<engine>"), MS_LAG_PROBE_MODE_GAP_MS
+                        // (1500) apart, the box's choice as the user makes it; then Play once nothing loads: it must play
+                        const QStringList seqSteps = (qEnvironmentVariableIsSet("MS_LAG_PROBE_MODESEQ")
+                                                      ? qEnvironmentVariable("MS_LAG_PROBE_MODESEQ") : QString("ms4,library"))
+                                                     .split(QChar(0x2c), QString::SkipEmptyParts);
+                        const int gap = qEnvironmentVariableIsSet("MS_LAG_PROBE_MODE_GAP_MS")
+                                        ? qEnvironmentVariableIntValue("MS_LAG_PROBE_MODE_GAP_MS") : 1500;
+                        add("setup m", []() { mscore->showPlayPanel(true); }, 2000, [this]() { return quiet(); }, openTimeout);
+                        add("begin m", [this]() { beginPhase("m", "mode change"); }, 500);
+                        add("reload m", [this]() { measured("reload", 0, [this]() { reload(); return hostState(); }); }, gap);
+                        for (const QString& step : seqSteps)
+                              add("mode " + step, [this, step]() { measured("mode " + step, 0, [this, step]() {
+                                    const QString before = hostState();
+                                    chooseMode(step);
+                                    return before + " -> " + hostState(); }); }, gap);
+                        add("loaded m", [this]() { measured("after the changes", 0, [this]() { return hostState(); }); }, 1000,
+                            []() { return !SoundLibraryHost::instance()->loading(); }, 120000);
+                        add("loaded m2", [this]() { measured("loading done", 0, [this]() { return hostState(); }); }, 500);
+                        add("play m", [this]() { measured("play press", 0, [this]() { return pressPlay(); }); }, 3000,
+                            []() { return seq && seq->isPlaying(); }, 60000);
+                        add("playing m", [this]() { measured("playing", 0, [this]() { return hostState(); }); }, 1000);
+                        add("stop m", [this]() { measured("stop", 0, [this]() { return pressStop(); }); }, 1500,
+                            []() { return seq && !seq->isPlaying(); }, 20000);
+                        add("end m", [this]() { endPhase(); }, 1000);
                         }
                   else if (p == "g") {
                         // g: a change while playing that needs patches not loaded (the first part to MS4, then back to the
