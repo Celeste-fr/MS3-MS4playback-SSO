@@ -171,7 +171,7 @@ static QString noteName(int tpc, int pitch, int* octave)
       static const char letters[] = "FCGDAEB";
       const int t = tpc + 1;                          // F double flat = 0
       const int alter = (t >= 0 ? t / 7 : -((6 - t) / 7)) - 2;
-      QString s(QChar(letters[((t % 7) + 7) % 7]));
+      QString s = QString(QChar(letters[((t % 7) + 7) % 7]));     // (not s(QChar(…)): MSVC reads that as a function declaration)
       for (int i = 0; i < qAbs(alter); ++i)
             s += alter < 0 ? 'b' : '#';
       const int o = (pitch - alter) / 12 - 1;
