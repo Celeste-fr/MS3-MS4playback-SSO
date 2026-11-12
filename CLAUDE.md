@@ -439,7 +439,7 @@ changes one tick after their chord; the technique comes from the notation.
   MuseScore's process; K = up to K. `Vst3Plugin::load` makes a remote instance whose calls a local Vst3Plugin in the helper
   replays in order on the same kind of thread (Kontakt's setState work on the helper's main thread, so MuseScore's window
   stays free), bit-identical (`tst_soundlibrary::remoteNull`). Control: pipes; audio: a shared-memory segment per instance
-  and two semaphores, no added latency. A helper that dies, or doesn't answer a block for 15 s (`HUNG_MS`), plays silence;
+  and two semaphores, no added latency. A helper that dies, or doesn't answer a block for 15 s (`HUNG_MS`), plays silence; a load call (create, setState) not answered for 300 s (`loadHungMs`, `MS_VST3_LOAD_HUNG_MS`) ends the helper, logs "hung" in load times.log and isn't loaded again until restart; Play, the preload and `loading()` wait only for loads the score still needs (`neededPending`: the mode box set to MS4 mid-load leaves Play free);
   `SoundLibraryHost::checkHostProcesses` says so, reloads the instances in a new helper and plays on; a patch whose helper
   ended `MAX_HELPER_ENDS` (3) times isn't reloaded. No helper can start: in-process, logged. Offline renders use helpers too;
   kthost always hosts in-process. Live and MIDI out unchanged. Open: a ~2.6 s audio-callback stall per helper start while
@@ -585,7 +585,7 @@ the Lua standalone check.
 - `tst_playbackaudit`: 14 passed, 1 skipped (`auditScore` needs `MS_AUDIT_SCORE`: VERIFY.md › Playback audit). Baseline, Whence
   (quarter tones), Recommended, 2026-10-29: ARRIVAL 33 fail / 7 warn, LEVEL STEP 26 info, every other kind 0 (the heard check on
   the real sound, build 491: 35 fail / 19 warn).
-- `tst_liveequivalence` (links mscoreapp; uses tst_soundlibrary's test synth): 93 passed, 5 skipped (tools, not tests:
+- `tst_liveequivalence` (links mscoreapp; uses tst_soundlibrary's test synth): 96 passed, 5 skipped (2026-11-12, with libraryChangeDuringLoad's three rows) (tools, not tests:
   `dumpEvents`, `utilitySet`, `scriptValuesSet`, `chunkCompare`; `twoLibraries` without `MS_VIAL_VST3`). `dumpEvents` takes
   `MS_DUMP_SCORE`, `MS_DUMP_MAP`, `MS_DUMP_OUT`, `MS_DUMP_SETTINGS`, `MS_DUMP_CHUNKED` (renders as playback does), `MS_DUMP_LIVE`
   (as Live's clips, plus kontakts.txt / routes.txt / multis.txt), `MS_DUMP_TIMING`; every dump writes routemap.txt and

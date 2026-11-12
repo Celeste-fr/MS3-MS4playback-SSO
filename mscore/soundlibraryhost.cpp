@@ -85,6 +85,8 @@
 #include "seq.h"
 #include "shortcut.h"
 
+#include <bitset>
+
 #ifdef USE_VST3
 #include "audio/vst3/backgroundload.h"
 #include "audio/vst3/kontaktsetup.h"
@@ -155,6 +157,11 @@ SoundLibraryHost::SoundLibraryHost()
                   s->idle();
                   checkHostProcesses();
                   }
+            // (loads the score no longer needs, finished while no preload runs: spares, or into their free slots, released
+            // at the next sync)
+            if (!_pending.empty() && !_preloadTimer.isActive() && !_syncing && !_releasing && _stepping == 0 && !(seq && seq->isPlaying()))
+                  if (const std::shared_ptr<const SoundLib::Library> library = SoundLib::current())
+                        harvest(*library, -1);
             // (just edited, stopped: the gains wait for the edit's renders, made between events: editwarmup.h)
             if (EditWarmup::instance()->pending(_slotScore))
                   return;
@@ -2029,7 +2036,7 @@ bool SoundLibraryHost::readyToPlayInner(Score* score, QString* error)
             return false;
       harvest(*library, -1);
       MasterScore* ms = score->masterScore();
-      if (!_pending.empty() || (_preloadTimer.isActive() && _preloadScore == ms)) {
+      if (neededPending(ms) > 0 || (_preloadTimer.isActive() && _preloadScore == ms)) {
             if (!_preloadTimer.isActive() || _preloadScore != ms)
                   preloadSoon(score);
             _preloadKeep = false;                   // (Play: what the score no longer needs goes once all are loaded)
@@ -2187,13 +2194,21 @@ const MasterScore* SoundLibraryHost::shownScore(const MasterScore* fallback)
       return c ? c->masterScore() : nullptr;
       }
 
+#ifdef USE_VST3
+static const std::vector<SoundLib::Route>& routesFor(MasterScore* score, const std::shared_ptr<const SoundLib::Library>& library,
+                                                     double* ms);
+#endif
+
 bool SoundLibraryHost::loading(const Score* score) const
       {
 #ifdef USE_VST3
       if (_stepping > 0 && !_releasing)
             return true;
-      if (!_pending.empty())
-            return true;                            // (a load on a worker thread: for this score or the one before)
+      // (a load on a worker thread the score needs, or the one before needs: Play waits for it; one it no longer needs
+      // finishes in the background: the owner, 2026-11-11, the mode box set to MS4 while SSO loaded, Play grayed for good)
+      const MasterScore* s = score ? score->masterScore() : _preloadScore.data();   // (none: every load counts)
+      if (!_pending.empty() && neededPending(s) > 0)
+            return true;
       if (!_preloadTimer.isActive())
             return false;
       return !score || !_preloadScore || score->masterScore() == _preloadScore;
@@ -2366,8 +2381,10 @@ void SoundLibraryHost::preloadStepInner()
             }
       // one at a time (parallelLoads): the next instance is made once the one before is in its slot, as before, when
       // setState ran here; its setState on a worker thread meanwhile, the window free
-      const int maxLoads = parallelLoads() - int(_pending.size());
-      if (maxLoads <= 0) {
+      // (every thread busy with loads the score no longer needs: no new load, but syncSome says what remains, so that the
+      // preload ends when nothing it needs is left)
+      const int maxLoads = std::max(0, parallelLoads() - int(_pending.size()));
+      if (maxLoads <= 0 && neededPending(_preloadScore) > 0) {
             _preloadTimer.start(20);
             return;
             }
@@ -2519,6 +2536,50 @@ struct SoundLibraryHost::Batch {
 bool SoundLibraryHost::pendingOn(int slot) const
       {
       return std::any_of(_pending.begin(), _pending.end(), [slot](const std::unique_ptr<Pending>& p) { return p->slot == slot; });
+      }
+
+int SoundLibraryHost::neededPending(const MasterScore* score) const
+      {
+      if (_pending.empty())
+            return 0;
+      std::shared_ptr<const SoundLib::Library> library = SoundLib::current();
+      if (!library || SoundLib::output() != SoundLib::Output::PLUGIN || !score)
+            return int(_pending.size());
+      // (in a command, the routes worked out at every call: each counted as needed instead, until it ends)
+      const UndoStack* undo = score->undoStack();
+      if (!undo || undo->active())
+            return int(_pending.size());
+      MasterScore* ms = const_cast<MasterScore*>(score);
+      std::bitset<64> used;
+      for (const SoundLib::Route& r : routesFor(ms, library, nullptr))
+            if (!r.instrument->kit)
+                  used.set(size_t(r.port * 16 + r.channel));
+      return int(std::count_if(_pending.begin(), _pending.end(), [&used](const std::unique_ptr<Pending>& p) {
+            return p->slot >= 0 && p->slot < 64 && used.test(size_t(p->slot));
+            }));
+      }
+
+//---------------------------------------------------------
+//   loadFailed
+//    a load in a helper that failed because its helper ended (crashed, or ended for a hung load call: Vst3Remote::takeHung):
+//    counted with checkHostProcesses' ends; a hung one isn't loaded again this session (it would hang loadHungMs() again,
+//    Play grayed meanwhile), nor one whose helper ended MAX_HELPER_ENDS times
+//---------------------------------------------------------
+
+void SoundLibraryHost::loadFailed(const SoundLib::Library& library, const QString& patch, const QString& why)
+      {
+      const QString key = library.name + "|" + patch;
+      const bool hung = Vst3Remote::takeHung(patch);
+      const bool given = hung || ++_crashes[key] >= MAX_HELPER_ENDS;
+      if (given)
+            _crashedPatches.insert(key);
+      const QString line = QString("%1: its load %2 (%3)%4").arg(patch, hung ? QString("hung") : QString("failed, its helper ended"), why)
+                           .arg(given ? QString(": not loaded again this session (restart MuseScore to try again)") : QString(": loading it again"));
+      qWarning("Sound library: %s", qPrintable(line));
+      logTime(library, line);
+      if (mscore)
+            mscore->showMessage(given ? tr("%1 could not be loaded (the plug-in didn't answer): silent until MuseScore restarts").arg(patch)
+                                      : tr("%1 could not be loaded: loading again…").arg(patch), 15000);
       }
 
 //---------------------------------------------------------
@@ -2687,6 +2748,8 @@ void SoundLibraryHost::finishLoad(std::unique_ptr<Pending> pl, const SoundLib::L
                   logTime(library, message);
                   if (mscore)
                         mscore->showMessage(message, 10000);
+                  if (pl->remote)
+                        loadFailed(library, pl->name, pl->error);
                   return;
                   }
             const Vst3Plugin::Times& tm = pl->plugin->times();
@@ -2785,6 +2848,13 @@ void SoundLibraryHost::finishLoad(std::unique_ptr<Pending> pl, const SoundLib::L
       pl->times = tm;
       pl->finishMs = t.nsecsElapsed() / 1e6 - loggedMs - settleMs - valuesMs;
       }
+      // (its helper ended while it loaded: a dead instance plays nothing; dropped, counted, loaded again unless it hung)
+      if (pl->remote && pl->plugin && !pl->plugin->alive()) {
+            loadFailed(library, pl->name, pl->error.isEmpty() ? QString("its helper ended") : pl->error);
+            if (_batch)
+                  ++_batch->failed;
+            return;
+            }
       // into its slot
       QElapsedTimer t;
       t.start();
@@ -3272,8 +3342,10 @@ bool SoundLibraryHost::syncSome(Score* score, QString* error, int maxLoads, int*
             }
       if (maxLoads < 0)
             harvest(*library, 0);
-      if (remaining)
-            *remaining += int(_pending.size()) + (_resync ? 1 : 0);
+      if (remaining)                              // (a load the score no longer needs holds nothing up: neededPending)
+            *remaining += int(std::count_if(_pending.begin(), _pending.end(), [&used](const std::unique_ptr<Pending>& p) {
+                  return p->slot >= 0 && p->slot < 64 && used[size_t(p->slot)];
+                  })) + (_resync ? 1 : 0);
       for (const Need& n : needs)                 // (an instance kept or moved in: the slots it plays now)
             if (vst->plugin(n.slot))
                   _slots[size_t(n.slot)].routes = n.routes;
