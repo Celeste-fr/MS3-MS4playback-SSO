@@ -1101,6 +1101,11 @@ class Score : public QObject, public ScoreElement {
       bool scordaturaView() const { return _scordaturaView; }
       void setScordaturaView(bool v);                   // not undoable: cmdToggleScordaturaView
       void cmdToggleScordaturaView();
+      // the playability checker's free-bass switch for every accordion of the score (a metaTag of the master score,
+      // saved in the file); undoable through cmdToggleAccordionFreeBass
+      bool accordionFreeBass() const;
+      void setAccordionFreeBass(bool v);
+      void cmdToggleAccordionFreeBass();
       void updateScordaturaShifts();
       bool scordaturaShift(const Note* n, int* diatonic, int* chromatic) const;
       void layoutLinear(bool layoutAll, LayoutContext& lc);

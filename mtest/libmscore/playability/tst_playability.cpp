@@ -108,6 +108,7 @@ class TestPlayability : public QObject, public MTest
       void falseAlarms();
       void falseAlarms2();
       void noDynamic();
+      void accordion();
       void dump();
       };
 
@@ -2660,6 +2661,115 @@ void TestPlayability::noDynamic()
       for (const QString& x : got)
             QVERIFY(!x.contains("Violin 2"));
       delete score;
+      }
+
+//---------------------------------------------------------
+//   accordion (A1-A7, PLAYABILITY.md "Accordion"): accordion-tests.mscx and accordion-switch.mscx from
+//   tools/playability/gen_accordion_tests.py
+//---------------------------------------------------------
+
+void TestPlayability::accordion()
+      {
+      using namespace Playability;
+      const QStringList KINDS = { "accordionRange", "accordionSpan", "accordionNotes", "accordionChord", "accordionNotation",
+                                  "accordionBellows", "accordionFreeBass" };
+      MasterScore* score = readScore(DIR + "accordion-tests.mscx");
+      QVERIFY(score);
+      PlayabilityResult r = Playability::analyse(score);
+      const QString dots = QString(" ") + QChar(0x2026);
+      QStringList want = {
+            // A1: bar 1 (F3, A6) clean; outside the concert model dark yellow, the red limits themselves too; beyond them red
+            "2 | Accordion | accordionRange | risky | E3", "2 | Accordion | accordionRange | risky | Bb6",
+            "3 | Accordion | accordionRange | risky | E2", "3 | Accordion | accordionRange | risky | E7",
+            "4 | Accordion | accordionRange | impossible | Eb2", "4 | Accordion | accordionRange | impossible | F7",
+            // A2: a major 10th dark yellow (the red limit itself), 17 semitones red, a major 9th clean, a minor 10th dark yellow
+            "5 | Accordion | accordionSpan | risky | C4 + E5",
+            "6 | Accordion | accordionSpan | impossible | C4 + F5",
+            "7 | Accordion | accordionSpan | risky | C4 + Eb5",
+            // A7: five notes clean, six dark yellow
+            "8 | Accordion | accordionNotes | risky | C4 + D4 + E4 + F4 + G4 + A4",
+            // A4 without symbols; A3 quiet on major, minor, 7th without its fifth, dim7
+            "9 | Accordion | accordionNotation | notation | E3 + G#3 + B3",
+            "9 | Accordion | accordionNotation | notation | A3 + C4 + E4",
+            "9 | Accordion | accordionNotation | notation | G3 + B3 + F4",
+            "9 | Accordion | accordionNotation | notation | F3 + Ab3 + B3 + D4",
+            // A3: a major 7th and a minor 2nd are no button
+            "10 | Accordion | accordionNotation | notation | F3 + A3 + C4 + E4",
+            "10 | Accordion | accordionChord | risky | F3 + A3 + C4 + E4",
+            "10 | Accordion | accordionNotation | notation | E3 + F3",
+            "10 | Accordion | accordionChord | risky | E3 + F3",
+            // A4: E3 with a symbol and its repeat clean; G3 alone above the D line
+            "11 | Accordion | accordionNotation | notation | G3",
+            // A4: D2 + D3 (D3 on the line: a bass note) written in two octaves
+            "12 | Accordion | accordionNotation | notation | D2 + D3",
+            // A5: 8 s at f (exactly 4 s in bar 16, breaks in 18-19, mf in 21-22: clean)
+            "13 | Accordion | accordionBellows | risky | E3 + C4 + E4 + G4" + dots,
+            // A6: free bass by name, and by a staff text ("converter"); no A3 / A4 on either
+            "2 | Free-Bass Accordion | accordionFreeBass | impossible | Eb1",
+            "4 | Free-Bass Accordion | accordionFreeBass | impossible | D6",
+            "1 | Accordion II | accordionFreeBass | impossible | Eb1" };
+      want.sort();
+      compare(kindRows(r, KINDS), want);
+      for (const PlayabilityRow& row : r.rows) {
+            if (row.kind == "accordionRange" && row.bar == 4)
+                  QCOMPARE(row.reason, QString("outside every accordion's right-hand range, E2-E7 (piano accordion F3-A6 and E3-C7, "
+                                               "button accordion A3-E7 and E2-C#7, Sevsay p. 136)"));
+            if (row.kind == "accordionBellows")
+                  QCOMPARE(row.reason, QString("full chords in both hands at f or louder for 8.0 s without a break: one bellows "
+                                               "stroke lasts about 4 s at full loudness with full chords, and its direction cannot "
+                                               "change without re-attacking (Blatter p. 298)"));
+            }
+      // A5 marks the chords struck after the 4 s (bar 14, beat 3), not those before
+      QStringList m = marks(score, r);
+      QVERIFY2(m.contains("Accordion | 25920 | 60 | outOfReach"), qPrintable(m.join("\n")));
+      QVERIFY2(!m.contains("Accordion | 24960 | 60 | outOfReach"), qPrintable(m.join("\n")));
+      // A4 is a notation mark, A1's red a red one
+      QVERIFY(m.contains("Accordion | 21120 | 50 | notation"));             // bar 12's D3
+      QVERIFY(m.contains("Accordion | 5760 | 39 | impossible"));            // bar 4's Eb2
+      QVERIFY(hasAccordion(score));
+      delete score;
+
+      // the score's switch: a metaTag in the file makes every accordion free-bass
+      score = readScore(DIR + "accordion-switch.mscx");
+      QVERIFY(score);
+      QVERIFY(score->accordionFreeBass());
+      r = Playability::analyse(score);
+      compare(kindRows(r, KINDS), { "1 | Accordion | accordionFreeBass | impossible | Eb1" });
+      // switched off (undoably), the part is a Stradella bass again
+      score->startCmd();
+      score->cmdToggleAccordionFreeBass();
+      score->endCmd();
+      QVERIFY(!score->accordionFreeBass());
+      QVERIFY(score->metaTag(ACCORDION_FREE_BASS_TAG).isEmpty());
+      r = Playability::analyse(score);
+      want = QStringList { "2 | Accordion | accordionNotation | notation | F3 + A3 + C4 + E4",
+                           "2 | Accordion | accordionChord | risky | F3 + A3 + C4 + E4" };
+      want.sort();
+      compare(kindRows(r, KINDS), want);
+      score->undoRedo(true, nullptr);
+      QVERIFY(score->accordionFreeBass());
+      delete score;
+
+      // detection by name, free bass by text
+      QVERIFY(isAccordion("keyboard.accordion", "Piano"));
+      QVERIFY(isAccordion("", "Accordions") && isAccordion("", "Akkordeon") && isAccordion("", "Fisarmonica"));
+      QVERIFY(isAccordion("", QString::fromUtf8("Accordéon")) && isAccordion("", "Bayan") && isAccordion("", "Bajan"));
+      QVERIFY(isAccordion("", "Button Accordion"));
+      QVERIFY(!isAccordion("keyboard.bandoneon", "Bandoneon") && !isAccordion("", "Bandoneon") && !isAccordion("", "Concertina"));
+      QVERIFY(!isAccordion("keyboard.piano", "Piano"));
+      QVERIFY(freeBassText("free bass") && freeBassText("Free-Bass") && freeBassText("freebass") && freeBassText("Bayan")
+              && freeBassText("bajan") && freeBassText("Converter") && freeBassText("melodic bass"));
+      QVERIFY(!freeBassText("Accordion") && !freeBassText("bass"));
+      // A3's shapes on other roots
+      auto mask = [](std::initializer_list<int> pcs) { int b = 0; for (int p : pcs) b |= 1 << (p % 12); return b; };
+      QCOMPARE(int(stradellaChord(mask({ 7, 11, 2 }))), int(StradellaChord::MAJOR));        // G B D
+      QCOMPARE(int(stradellaChord(mask({ 1, 4, 8 }))), int(StradellaChord::MINOR));         // C# E G#
+      QCOMPARE(int(stradellaChord(mask({ 2, 6, 9, 0 }))), int(StradellaChord::DOMINANT7));  // D7
+      QCOMPARE(int(stradellaChord(mask({ 2, 6, 0 }))), int(StradellaChord::DOMINANT7));     // D7 without A
+      QCOMPARE(int(stradellaChord(mask({ 11, 2, 5, 8 }))), int(StradellaChord::DIMINISHED7));
+      QCOMPARE(int(stradellaChord(mask({ 0, 4, 7, 11 }))), int(StradellaChord::NONE));      // Cmaj7
+      QCOMPARE(int(stradellaChord(mask({ 0, 4, 8 }))), int(StradellaChord::NONE));          // augmented
+      QCOMPARE(int(stradellaChord(mask({ 0, 7 }))), int(StradellaChord::NONE));             // a bare fifth
       }
 
 //---------------------------------------------------------

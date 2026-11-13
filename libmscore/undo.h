@@ -731,6 +731,23 @@ class ChangeScordaturaView : public UndoCommand {
       };
 
 //---------------------------------------------------------
+//   ChangeAccordionFreeBass
+//    the playability checker's free-bass switch for the score's accordions (a metaTag of the master
+//    score, Playability ACCORDION_FREE_BASS_TAG); the checker re-runs with the layout
+//---------------------------------------------------------
+
+class ChangeAccordionFreeBass : public UndoCommand {
+      Score* score;
+      bool flag;
+
+      void flip(EditData*) override;
+
+   public:
+      ChangeAccordionFreeBass(Score* s, bool f) : score(s), flag(f) {}
+      UNDO_NAME("ChangeAccordionFreeBass")
+      };
+
+//---------------------------------------------------------
 //   ChangePageNumberOffset
 //---------------------------------------------------------
 

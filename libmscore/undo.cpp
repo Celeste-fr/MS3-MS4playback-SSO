@@ -1716,6 +1716,17 @@ void ChangeScordaturaView::flip(EditData*)
       }
 
 //---------------------------------------------------------
+//   ChangeAccordionFreeBass::flip
+//---------------------------------------------------------
+
+void ChangeAccordionFreeBass::flip(EditData*)
+      {
+      bool old = score->accordionFreeBass();
+      score->setAccordionFreeBass(flag);
+      flag = old;
+      }
+
+//---------------------------------------------------------
 //   ChangeStyleVal::flip
 //---------------------------------------------------------
 

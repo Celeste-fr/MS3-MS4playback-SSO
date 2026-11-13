@@ -407,6 +407,49 @@ bool isHarp(const QString& instrumentId, const QString& name);
 bool isTimpani(const QString& instrumentId, const QString& name);
 
 //---------------------------------------------------------
+//   Accordion, A1-A7 (owner-approved 2026-11-13; sources: Blatter 1997 pp. 295-298, Sevsay p. 136;
+//   PLAYABILITY.md "Accordion"). Red only where no accordion can play it: A1 outside every model's
+//   right-hand range, A2 a right-hand span over a 10th, A6 a free-bass note outside its register.
+//   Pitches are MIDI numbers (C4 = 60); Sevsay's Helmholtz names: c' = C4, 1E = E1.
+//---------------------------------------------------------
+
+// A1 right-hand range. Red outside the union of every model Sevsay p. 136 gives (piano accordion f-a''' and
+// e-c''''; button accordion a-e'''' and E-c#''''): E2-E7. Dark yellow outside the concert piano accordion's
+// 41 keys, f-a''' (Sevsay p. 136; Blatter p. 295, 41 keys: F3-A6 is exactly 41 keys)
+constexpr int ACCORDION_RH_LO = 40;                 // E2
+constexpr int ACCORDION_RH_HI = 100;                // E7
+constexpr int ACCORDION_RH_CONCERT_LO = 53;         // F3
+constexpr int ACCORDION_RH_CONCERT_HI = 93;         // A6
+// A2 right-hand span: K1's KEYBOARD_NINTH / KEYBOARD_TENTH (Blatter p. 244; p. 296: a 10th is playable)
+// A7 more than this many notes struck at once in the right hand: dark yellow. Derived (five fingers; a thumb can
+// take two adjacent keys, so not red); no book gives a number
+constexpr int ACCORDION_RH_FINGERS = 5;
+// A3 / A4 Stradella bass notation (Blatter p. 297): notes on the bass clef's middle line (D3) and below are single
+// bass notes, notes in the third space (E3) and above are chord buttons with a symbol. Compared by diatonic step,
+// as written (an Eb3 is in the E space, a D#3 on the D line).
+constexpr int ACCORDION_D_LINE_PITCH = 50;          // D3 (with tpc 16, D)
+// A5 bellows (Blatter p. 298): at full loudness with full chords one stroke sustains about four seconds
+constexpr double ACCORDION_BELLOWS_SECONDS = 4.0;
+constexpr int ACCORDION_FULL_RH = 3;                // "full chords": 3+ notes sounding in the right hand
+// A6 free-bass left hand (Sevsay p. 136, the 185-button combination model's single bass register, 1E-c#''')
+constexpr int ACCORDION_FREE_LO = 28;               // E1
+constexpr int ACCORDION_FREE_HI = 85;               // C#6
+// the score's switch (a metaTag, saved in the file; "1": every accordion part of the score is free-bass)
+constexpr const char* ACCORDION_FREE_BASS_TAG = "playabilityFreeBass";
+
+// an accordion: MusicXML id keyboard.accordion (MuseScore's "accordion"), else by name (accordion, accordéon,
+// Akkordeon, fisarmonica, bayan, bajan, button accordion; plural too). Bandoneon and concertina are not.
+bool isAccordion(const QString& instrumentId, const QString& name);
+// a free-bass accordion named in a part name or a staff text: free bass / free-bass / freebass / bayan / bajan /
+// converter / melodic bass
+bool freeBassText(const QString& text);
+// a pitch-class set (bit 0 = C) one Stradella chord button gives (Blatter pp. 296-297; Sevsay p. 136): a major or
+// minor triad, a dominant 7th (Blatter p. 297: the button's 7th has no fifth; written with or without it), a
+// diminished 7th
+enum class StradellaChord : char { NONE, MAJOR, MINOR, DOMINANT7, DIMINISHED7 };
+StradellaChord stradellaChord(int pitchClassMask);
+
+//---------------------------------------------------------
 //   B4-B6 trombone slide, valve brass fingerings: the owner's approved spec (diagrams-spec-brass.md,
 //   2026-10-08). The lists come from Blatter's charts (playabilitybrass.h, generated): trombone
 //   pp. 469-470, valved brass pp. 463-468, horn pp. 461-462; where a chart covers a note its entries
@@ -651,7 +694,8 @@ constexpr const char* C3_LEGATO_WORDS = "legato";
 // colour and count); every other kind is playability. Re-tag a kind by moving it in or out of this list.
 constexpr const char* NOTATION_KINDS[] = {
       "ledger", "clef", "divisi", "firstDynamic", "technique", "accidental", "clarinetKey",
-      "stringName", "harmonicString", "harmonicLine", "vocal", "tempo", "slurRepeat" };
+      "stringName", "harmonicString", "harmonicLine", "vocal", "tempo", "slurRepeat",
+      "accordionNotation" };
 
 }     // namespace Playability
 }     // namespace Ms

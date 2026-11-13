@@ -2446,6 +2446,17 @@ Shortcut Shortcut::_sc[] = {
          },
       {
          MsWidget::MAIN_WINDOW,
+         STATE_NORMAL | STATE_NOTE_ENTRY,
+         "toggle-accordion-free-bass",
+         QT_TRANSLATE_NOOP("action","Free-Bass Accordion"),
+         QT_TRANSLATE_NOOP("action","Toggle 'Free-Bass Accordion'"),
+         QT_TRANSLATE_NOOP("action","Check this score's accordions as free-bass instruments (single notes on the left hand)"),
+         Icons::Invalid_ICON,
+         Qt::WindowShortcut,
+         ShortcutFlags::A_SCORE
+         },
+      {
+         MsWidget::MAIN_WINDOW,
          STATE_NORMAL | STATE_NOTE_ENTRY | STATE_EDIT ,
          "toggle-playability",
          QT_TRANSLATE_NOOP("action","Check Playability"),

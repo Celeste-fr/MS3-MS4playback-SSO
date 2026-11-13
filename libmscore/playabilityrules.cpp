@@ -1254,6 +1254,44 @@ bool isHarp(const QString& id, const QString& name)
       return NAME.match(name).hasMatch() && !name.contains("celtic", Qt::CaseInsensitive);
       }
 
+bool isAccordion(const QString& id, const QString& name)
+      {
+      static const QRegularExpression NAME(QString::fromUtf8("accordion|accord[eé]on|akkordeon|fisarmonic|\\bba[yj]an"),
+                                           QRegularExpression::CaseInsensitiveOption);
+      static const QRegularExpression OTHER("bandone|concertina", QRegularExpression::CaseInsensitiveOption);
+      if (id == "keyboard.accordion" || id == "accordion")
+            return true;
+      if (id == "keyboard.bandoneon" || id == "keyboard.concertina")
+            return false;
+      return NAME.match(name).hasMatch() && !OTHER.match(name).hasMatch();
+      }
+
+bool freeBassText(const QString& text)
+      {
+      static const QRegularExpression FREE("free[\\s-]?bass|\\bba[yj]an|converter|melodic\\s+bass",
+                                           QRegularExpression::CaseInsensitiveOption);
+      return FREE.match(text).hasMatch();
+      }
+
+StradellaChord stradellaChord(int mask)
+      {
+      struct Shape { int bits; StradellaChord kind; };
+      static const Shape SHAPES[] = {
+            { (1 << 0) | (1 << 4) | (1 << 7), StradellaChord::MAJOR },
+            { (1 << 0) | (1 << 3) | (1 << 7), StradellaChord::MINOR },
+            { (1 << 0) | (1 << 4) | (1 << 7) | (1 << 10), StradellaChord::DOMINANT7 },
+            { (1 << 0) | (1 << 4) | (1 << 10), StradellaChord::DOMINANT7 },           // without the fifth (Blatter p. 297)
+            { (1 << 0) | (1 << 3) | (1 << 6) | (1 << 9), StradellaChord::DIMINISHED7 } };
+      mask &= 0xfff;
+      for (int root = 0; root < 12; ++root)
+            for (const Shape& sh : SHAPES) {
+                  const int rotated = ((sh.bits << root) | (sh.bits >> (12 - root))) & 0xfff;
+                  if (rotated == mask)
+                        return sh.kind;
+                  }
+      return StradellaChord::NONE;
+      }
+
 bool isTimpani(const QString& id, const QString& name)
       {
       static const QRegularExpression NAME("timpan|\\btimp\\b|pauken", QRegularExpression::CaseInsensitiveOption);

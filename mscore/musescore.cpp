@@ -2278,7 +2278,8 @@ MuseScore::MuseScore()
       menuView->addSeparator();
       // the playability checker (libmscore/playability.h)
       // the panel in the View menu; its two switches (check on/off, open strings) sit in the panel itself (owner 2026-11-06)
-      for (const char* name : { "toggle-playability-panel", "toggle-playability", "toggle-playability-open-strings" })
+      for (const char* name : { "toggle-playability-panel", "toggle-playability", "toggle-playability-open-strings",
+                                "toggle-accordion-free-bass" })
             getAction(name)->setCheckable(true);
       menuView->addAction(getAction("toggle-playability-panel"));
       getAction("toggle-playability")->setChecked(Playability::enabled);
@@ -3222,6 +3223,8 @@ void MuseScore::updateInspector()
             _playabilityPanel->setScore(cs);
       if (QAction* sv = getAction("toggle-scordatura-view"))
             sv->setChecked(cs && cs->scordaturaView());
+      if (QAction* fb = getAction("toggle-accordion-free-bass"))
+            fb->setChecked(cs && cs->accordionFreeBass());
       }
 
 //---------------------------------------------------------
@@ -8196,6 +8199,15 @@ void MuseScore::cmd(QAction* a, const QString& cmd)
                         cs->endCmd();
                         }
                   a->setChecked(cs && cs->scordaturaView());
+                  }
+            else if (cmd == "toggle-accordion-free-bass") {
+                  // the playability checker's free-bass switch for this score's accordions (a metaTag); undoable
+                  if (cs) {
+                        cs->startCmd();
+                        cs->cmdToggleAccordionFreeBass();
+                        cs->endCmd();
+                        }
+                  a->setChecked(cs && cs->accordionFreeBass());
                   }
             else if (cmd == "toggle-bar-ruler") {
                   BarRuler::setEnabled(a->isChecked());

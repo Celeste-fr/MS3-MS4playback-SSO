@@ -84,6 +84,7 @@ class PlayabilityPanel : public QDockWidget {
       std::vector<PlayabilityRow> _rows;
       QCheckBox* _checkOn;          // View's "Check Playability", moved here (owner 2026-11-06)
       QCheckBox* _openStrings;      // View's "Mark Open Strings", moved here
+      QCheckBox* _freeBass;         // the score's accordions are free-bass (shown when the score has one)
       QLabel* _off;
       QLabel* _summary;             // the rows counted: impossible · risky · notation
       QStackedWidget* _stack;

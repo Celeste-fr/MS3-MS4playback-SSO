@@ -54,6 +54,7 @@
 #include "undo.h"
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <limits>
 #include <functional>
@@ -157,7 +158,7 @@ struct HarpPlan {
       bool changed[9] {};
       };
 
-enum class Family : char { NONE, HARP, TIMPANI, KEYBOARD, BRASS };
+enum class Family : char { NONE, HARP, TIMPANI, KEYBOARD, BRASS, ACCORDION };
 
 // a brass part: its type, the trombone attachments and the valves it names (else the defaults)
 struct BrassPart {
@@ -223,6 +224,11 @@ class Pass {
       std::vector<HarpPlan> checkHarp(Part* part, const QString& staffName);
       TimpaniPlan checkTimpani(Part* part, const QString& staffName, std::vector<PartMoment>* moments, bool* fifth);
       void checkKeyboard(Part* part, const QString& staffName);
+      // accordion, A1-A7 (PLAYABILITY.md "Accordion")
+      bool accordionFreeBass(Part* part) const;
+      void checkAccordion(Part* part, const QString& staffName);
+      void checkBellows(Part* part, const QString& staffName, const std::vector<PartMoment>& moments, bool freeBass,
+                        bool twoHands, int dStep);
       // brass (diagrams-spec-brass.md)
       BrassPart brassPart(Part* part) const;
       std::vector<BrassEntry> noteEntries(const BrassPart& bp, const Note* n) const;
@@ -1038,6 +1044,8 @@ static Family familyOf(Part* part)
             return Family::HARP;
       if (isTimpani(id, name))
             return Family::TIMPANI;
+      if (isAccordion(id, name))
+            return Family::ACCORDION;       // before the keyboards: a part named for one is an accordion
       if (isKeyboard(id, name) && part->nstaves() >= 2)
             return Family::KEYBOARD;
       if (brassType(id, name) != Brass::NONE)
@@ -3823,6 +3831,257 @@ void Pass::checkKeyboard(Part* part, const QString& staffName)
       }
 
 //---------------------------------------------------------
+//   checkAccordion
+//    A1-A7 (owner-approved 2026-11-13; PLAYABILITY.md "Accordion"). The upper staff is the right hand,
+//    the lower staff the left (cross-staff moves and L.H. / R.H. texts followed, as partMoments gives them);
+//    a part with one staff has a right hand only. Red only where no accordion can play it (A1 outside every
+//    model's range, A2 a span over a 10th, A6 a free-bass note outside its register); everything a player
+//    could do some way is dark yellow (A2 over a 9th, A3, A5, A7) or a notation row (A4). Only notes struck
+//    count (tied continuations do not); hidden notes are not played (partMoments leaves them out).
+//---------------------------------------------------------
+
+// a free-bass part: its name or any staff text in it says so, or the score's switch (ACCORDION_FREE_BASS_TAG)
+bool Pass::accordionFreeBass(Part* part) const
+      {
+      if (_score->masterScore()->metaTag(ACCORDION_FREE_BASS_TAG) == "1")
+            return true;
+      QString id, name;
+      partIdName(part, &id, &name);
+      if (freeBassText(name) || freeBassText(plainText(part->longName())) || freeBassText(plainText(part->partName())))
+            return true;
+      for (Segment* s = _score->firstSegment(SegmentType::ChordRest); s; s = s->next1(SegmentType::ChordRest))
+            for (Element* e : s->annotations())
+                  if (e->isStaffText() && e->track() >= part->startTrack() && e->track() < part->endTrack()
+                      && freeBassText(plainText(toTextBase(e)->xmlText())))
+                        return true;
+      return false;
+      }
+
+static QString pcSetNames(const std::vector<const PartNote*>& notes)
+      {
+      QStringList names;
+      std::vector<const PartNote*> sorted = notes;
+      std::stable_sort(sorted.begin(), sorted.end(), [](const PartNote* a, const PartNote* b) { return a->note->ppitch() < b->note->ppitch(); });
+      for (const PartNote* n : sorted) {
+            QString nm = tpcName(n->note->tpc1(), n->note->ppitch());
+            if (!names.contains(nm))
+                  names << nm;
+            }
+      return names.join(" + ");
+      }
+
+void Pass::checkAccordion(Part* part, const QString& staffName)
+      {
+      const bool freeBass = accordionFreeBass(part);
+      const bool twoHands = part->nstaves() >= 2;
+      const int dStep = absStep(16, ACCORDION_D_LINE_PITCH);
+      const std::vector<PartMoment> moments = partMoments(part);
+      int lastSymbolSet = 0;                    // A4: the chord-button notes written with the last chord symbol
+      for (const PartMoment& m : moments) {
+            std::vector<const PartNote*> rh, lh, rhRed, rhWarn, lhRed;
+            for (const PartNote& pn : m.notes) {
+                  if (!pn.attack)
+                        continue;
+                  const bool left = twoHands && pn.hand >= 1;
+                  const int p = pn.note->ppitch();
+                  if (!left) {
+                        // A1 (grace notes too)
+                        if (p < ACCORDION_RH_LO || p > ACCORDION_RH_HI)
+                              rhRed.push_back(&pn);
+                        else if (p < ACCORDION_RH_CONCERT_LO || p > ACCORDION_RH_CONCERT_HI)
+                              rhWarn.push_back(&pn);
+                        if (m.sub == 0)
+                              rh.push_back(&pn);
+                        }
+                  else {
+                        if (freeBass && (p < ACCORDION_FREE_LO || p > ACCORDION_FREE_HI))
+                              lhRed.push_back(&pn);           // A6
+                        if (m.sub == 0)
+                              lh.push_back(&pn);
+                        }
+                  }
+            momentRow(m, rhRed, staffName, "accordionRange", true,
+                      "outside every accordion's right-hand range, E2-E7 (piano accordion F3-A6 and E3-C7, button accordion "
+                      "A3-E7 and E2-C#7, Sevsay p. 136)");
+            momentRow(m, rhWarn, staffName, "accordionRange", false,
+                      "outside the concert piano accordion's 41 keys, F3-A6 (Sevsay p. 136; Blatter p. 295); larger piano and "
+                      "button accordions reach E2-E7 (Sevsay p. 136)");
+            momentRow(m, lhRed, staffName, "accordionFreeBass", true,
+                      "outside the free-bass register, E1-C#6 (Sevsay p. 136)");
+
+            // A2 span and A7 notes at once, the right hand alone (no division with the left); an arpeggio exempts
+            if (rh.size() >= 2 && !arpeggioOver(m, 0)) {
+                  int lo = 1000, hi = -1;
+                  std::set<int> pitches;
+                  for (const PartNote* pn : rh) {
+                        lo = std::min(lo, pn->note->ppitch());
+                        hi = std::max(hi, pn->note->ppitch());
+                        pitches.insert(pn->note->ppitch());
+                        }
+                  const int span = hi - lo;
+                  if (span > KEYBOARD_TENTH)
+                        momentRow(m, rh, staffName, "accordionSpan", true,
+                                  QString("the right hand spans %1 semitones, more than a 10th (Blatter p. 244; p. 296: "
+                                          "a 10th is playable on the accordion's keys)").arg(span));
+                  else if (span > KEYBOARD_NINTH)
+                        momentRow(m, rh, staffName, "accordionSpan", false,
+                                  QString("the right hand spans %1, more than a 9th (Blatter p. 244; p. 296: a 10th is "
+                                          "playable on the accordion's keys)").arg(spanPhrase(span)));
+                  if (int(pitches.size()) > ACCORDION_RH_FINGERS)
+                        momentRow(m, rh, staffName, "accordionNotes", false,
+                                  QString("%1 notes at once in the right hand: more than one per finger, a thumb must take two "
+                                          "adjacent keys (derived: five fingers)").arg(int(pitches.size())));
+                  }
+
+            if (freeBass || lh.empty() || m.sub != 0)
+                  continue;
+            // A3, A4: the Stradella bass, as written on the lower staff (Blatter p. 297)
+            std::vector<const PartNote*> chordNotes, bassNotes;
+            int chordSet = 0;
+            for (const PartNote* pn : lh) {
+                  if (absStep(pn->note->tpc(), pn->note->epitch()) > dStep) {
+                        chordNotes.push_back(pn);
+                        chordSet |= 1 << (pn->note->epitch() % 12);
+                        }
+                  else
+                        bassNotes.push_back(pn);
+                  }
+            bool symbol = false;
+            if (Segment* seg = _score->tick2segment(Fraction::fromTicks(m.tick), true, SegmentType::ChordRest))
+                  for (Element* e : seg->annotations())
+                        if (e->isHarmony() && e->track() >= part->startTrack() && e->track() < part->endTrack())
+                              symbol = true;
+            if (!chordNotes.empty()) {
+                  if (symbol)
+                        lastSymbolSet = chordSet;
+                  else if (chordSet != lastSymbolSet) {
+                        // a repeated note alone repeats the last chord (Blatter p. 297, Ex. 6.37); anything else needs a symbol
+                        momentRow(m, chordNotes, staffName, "accordionNotation", false,
+                                  "notes above the D line of a Stradella bass staff are chord buttons and need a chord symbol "
+                                  "(M, m, 7, d); a single bass note goes on or below the D line (Blatter p. 297, Ex. 6.36-6.37)");
+                        int pcs = 0;
+                        for (int b = chordSet; b; b &= b - 1)
+                              ++pcs;
+                        if (pcs >= 2 && stradellaChord(chordSet) == StradellaChord::NONE)
+                              momentRow(m, chordNotes, staffName, "accordionChord", false,
+                                        pcSetNames(chordNotes) + " is no single chord button (major or minor triad, dominant 7th "
+                                        "with or without the fifth, diminished 7th): the player must combine buttons "
+                                        "(Blatter pp. 296-297; Sevsay p. 136)");
+                        }
+                  }
+            // A4: one bass button sounds its note in several octaves at once (Sevsay p. 136; Blatter p. 296)
+            std::vector<const PartNote*> doubled;
+            for (const PartNote* a : bassNotes)
+                  for (const PartNote* b : bassNotes)
+                        if (a != b && a->note->tpc() == b->note->tpc() && a->note->epitch() != b->note->epitch()) {
+                              doubled.push_back(a);
+                              break;
+                              }
+            momentRow(m, doubled, staffName, "accordionNotation", false,
+                      "one bass note written in two octaves: a bass button sounds its note in several octaves at once, the "
+                      "octave is the bass shift's, not the player's (Sevsay p. 136; Blatter p. 296)");
+            }
+      checkBellows(part, staffName, moments, freeBass, twoHands, dStep);
+      }
+
+//---------------------------------------------------------
+//   checkBellows
+//    A5 (Blatter p. 298): at full loudness with full chords one bellows stroke lasts about four seconds,
+//    and the direction cannot change without re-attacking. A passage is a stretch in which the part plays
+//    at f or louder (the louder of its staves' dynamics and hairpins, levelAt) with 3+ notes sounding in the
+//    right hand and a left-hand chord sounding (a chord button, above the D line, on a Stradella bass; 3+
+//    notes on a free bass); it ends at a break (nothing sounding on either staff: a rest in every voice of
+//    both) or where the music is no longer loud with full chords. Longer than 4 s (the tempo map): dark
+//    yellow; the chords struck after the 4 s are marked (the passage's first chord if none is).
+//---------------------------------------------------------
+
+void Pass::checkBellows(Part* part, const QString& staffName, const std::vector<PartMoment>& moments, bool freeBass,
+                        bool twoHands, int dStep)
+      {
+      if (!twoHands)
+            return;
+      // per tick: the change in right-hand notes, left-hand notes and chord buttons sounding
+      std::map<int, std::array<int, 3>> delta;
+      for (const PartMoment& m : moments)
+            for (const PartNote& pn : m.notes) {
+                  if (!pn.attack || pn.grace >= 0 || pn.end <= m.tick)
+                        continue;
+                  const bool left = pn.hand >= 1;
+                  const bool button = left && absStep(pn.note->tpc(), pn.note->epitch()) > dStep;
+                  std::array<int, 3>& a = delta[m.tick];
+                  std::array<int, 3>& b = delta[pn.end];
+                  (left ? a[1] : a[0])++;
+                  (left ? b[1] : b[0])--;
+                  if (button) {
+                        a[2]++;
+                        b[2]--;
+                        }
+                  }
+      std::vector<StaffTexts> texts;
+      std::vector<int> staves;
+      for (int si = 0; si < part->nstaves(); ++si) {
+            staves.push_back(part->staff(si)->idx());
+            texts.push_back(staffTexts(staves.back()));
+            }
+      auto report = [&](int from, int to) {
+            const double secs = secondsBetween(from, to);
+            if (secs <= ACCORDION_BELLOWS_SECONDS)
+                  return;
+            std::vector<const PartNote*> marked, first;
+            for (const PartMoment& m : moments) {
+                  if (m.tick < from || m.tick >= to)
+                        continue;
+                  const bool late = secondsBetween(from, m.tick) > ACCORDION_BELLOWS_SECONDS;
+                  for (const PartNote& pn : m.notes) {
+                        if (!pn.attack || pn.grace >= 0)
+                              continue;
+                        if (m.tick == from)
+                              first.push_back(&pn);
+                        if (late)
+                              marked.push_back(&pn);
+                        }
+                  }
+            if (marked.empty())
+                  marked = first;
+            for (const PartNote* pn : marked)
+                  warnNote(pn->note, "accordionBellows");
+            addRow(from, to, part->startTrack(), staffName, "accordionBellows", "risky",
+                   QString("full chords in both hands at f or louder for %1 s without a break: one bellows stroke lasts "
+                           "about 4 s at full loudness with full chords, and its direction cannot change without "
+                           "re-attacking (Blatter p. 298)").arg(secs, 0, 'f', 1),
+                   pcSetNames(first) + (QString(" ") + QChar(0x2026)));
+            countLast();
+            };
+      std::array<int, 3> on { 0, 0, 0 };
+      int runFrom = -1, runTo = -1;
+      for (auto i = delta.begin(); i != delta.end(); ++i) {
+            for (int k = 0; k < 3; ++k)
+                  on[k] += i->second[k];
+            auto next = std::next(i);
+            if (next == delta.end())
+                  break;
+            bool full = on[0] >= ACCORDION_FULL_RH && (freeBass ? on[1] >= ACCORDION_FULL_RH : on[2] > 0);
+            if (full) {
+                  double level = 0;
+                  for (size_t k = 0; k < staves.size(); ++k)
+                        level = std::max(level, levelAt(texts[k].dyn, _hairpins[staves[k]], i->first));
+                  full = isLoud(level);
+                  }
+            if (full) {
+                  if (runFrom < 0)
+                        runFrom = i->first;
+                  runTo = next->first;
+                  }
+            else if (runFrom >= 0) {
+                  report(runFrom, runTo);
+                  runFrom = -1;
+                  }
+            }
+      if (runFrom >= 0)
+            report(runFrom, runTo);
+      }
+
+//---------------------------------------------------------
 //   inspectFamily: a harp's pedals, the timpani's drums, a keyboard hand at the chord
 //---------------------------------------------------------
 
@@ -3849,6 +4108,8 @@ ChordInfo Pass::inspectFamily(Chord* chord, Family f)
             names << p.second;
       }
       info.text = names.join(" + ");
+      if (f == Family::ACCORDION)
+            return info;                // the notes only: no keyboard strip (the left hand is buttons)
 
       if (f == Family::HARP) {
             std::vector<HarpPlan> plans = checkHarp(part, staffName);
@@ -4262,6 +4523,8 @@ void Pass::run()
                   checkTimpani(part, staffName, nullptr, nullptr);
             else if (f == Family::BRASS)
                   checkBrass(part, staffName);
+            else if (f == Family::ACCORDION)
+                  checkAccordion(part, staffName);
             else
                   checkKeyboard(part, staffName);
             }
@@ -4720,6 +4983,16 @@ ChordInfo inspect(Chord* chord)
 //   analyse
 //---------------------------------------------------------
 
+bool hasAccordion(Score* score)
+      {
+      if (!score)
+            return false;
+      for (Part* part : score->parts())
+            if (familyOf(part) == Family::ACCORDION)
+                  return true;
+      return false;
+      }
+
 PlayabilityResult analyse(Score* score)
       {
       PlayabilityResult res;
@@ -4795,6 +5068,31 @@ void Score::setScordaturaView(bool v)
 void Score::cmdToggleScordaturaView()
       {
       undo(new ChangeScordaturaView(this, !_scordaturaView));
+      }
+
+//---------------------------------------------------------
+//   accordion free-bass switch
+//    a metaTag of the master score (Playability::ACCORDION_FREE_BASS_TAG, "1" or absent), so the file
+//    keeps it and MuseScore 3.6 reads the file unchanged; undoable
+//---------------------------------------------------------
+
+bool Score::accordionFreeBass() const
+      {
+      return masterScore()->metaTag(Playability::ACCORDION_FREE_BASS_TAG) == "1";
+      }
+
+void Score::setAccordionFreeBass(bool v)
+      {
+      if (v)
+            masterScore()->setMetaTag(Playability::ACCORDION_FREE_BASS_TAG, "1");
+      else
+            masterScore()->metaTags().remove(Playability::ACCORDION_FREE_BASS_TAG);
+      setLayoutAll();
+      }
+
+void Score::cmdToggleAccordionFreeBass()
+      {
+      undo(new ChangeAccordionFreeBass(this, !accordionFreeBass()));
       }
 
 void Score::updateScordaturaShifts()

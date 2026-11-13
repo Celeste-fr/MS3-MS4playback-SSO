@@ -214,6 +214,8 @@ QString shortStaffName(const Part* part, const QString& longName, const Fraction
 // IV" text in force, else the pass's own choice (a chord's strings; a single note: the highest
 // string it lies on). Harmonics are left as they are.
 QHash<const Note*, std::pair<int, int>> scordaturaShifts(Score* score);
+// does the score have an accordion part (the panel shows the free-bass switch only then)
+bool hasAccordion(Score* score);
 // the colour Note::draw gives a note, or an invalid QColor
 QColor markColor(const Note* note, bool selected);
 

@@ -180,6 +180,7 @@ PlayabilityPanel::PlayabilityPanel(QWidget* parent)
             };
       _checkOn = mirror("toggle-playability");
       _openStrings = mirror("toggle-playability-open-strings");
+      _freeBass = mirror("toggle-accordion-free-bass");
       switches->addStretch(1);
       vl->addLayout(switches);
 
@@ -295,6 +296,8 @@ void PlayabilityPanel::retranslate()
       _off->setText(tr("The playability check is off. Turn on Check Playability above."));
       _checkOn->setText(getAction("toggle-playability")->text());
       _openStrings->setText(getAction("toggle-playability-open-strings")->text());
+      _freeBass->setText(getAction("toggle-accordion-free-bass")->text());
+      _freeBass->setToolTip(getAction("toggle-accordion-free-bass")->toolTip());
       }
 
 void PlayabilityPanel::changeEvent(QEvent* e)
@@ -339,6 +342,10 @@ void PlayabilityPanel::setScore(Score* s)
       bool newScore = s != _score;
       _score = s;
       _off->setVisible(!Playability::enabled);
+      // the free-bass switch: only for a score with an accordion; the action's state first, so the box follows it
+      // without triggering it
+      getAction("toggle-accordion-free-bass")->setChecked(_score && _score->accordionFreeBass());
+      _freeBass->setVisible(_score && Playability::hasAccordion(_score));
 
       // rows, the way the score reads: by bar, then staff
       std::vector<PlayabilityRow> rows;
