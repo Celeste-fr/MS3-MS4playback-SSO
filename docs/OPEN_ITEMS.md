@@ -766,6 +766,17 @@ last (the AGM trial has ended; they wait for the bought guitars).
     strings and winds. Needs slow-staccato data first: leads so far Pàmies-Vilà et al. 2018 (10 clarinettists, 0.2-0.3 s at a
     0.5 s IOI) and an informal pilot (bassoon / flute 0.17-0.23 s at 0.44 s written; `private/research-1110`). Then a blind
     A/B against the cap (slow and fast, a reference recording, catch trials) before any change.
+    **Explored 2026-11-13** (private/slow-staccato: round 1, SSO renders, round 2 under a rule committed before measuring;
+    the owner checked every reading; four stats-auditor passes; the measure passed a known-answer test):
+    - Real SSO on the VM (close mics, mf, one render, 4 pitches): the cap changes nothing for wind and brass staccatos at
+      -10 dB (their short samples end by themselves, e10 62-150 ms by pitch), and sets the strings' length (Performance
+      patch, 1 s notes: about 180-310 ms shorter with the cap, over 4 pitches).
+    - Strings, rising curve: insufficient (only Spheres has both short and long written staccatos; the rule needs two
+      ensembles); no multitrack dataset found that adds one.
+    - Winds: at W >= 0.6 s every player measured sounds 1.6-5.3x longer than SSO's short samples, but n = 7 players, in
+      substance one orchestra (Spheres K. 550/II) plus one anechoic flutist (3 notes); not tied to slowness (Spheres winds
+      are longer than SSO at 0.44 s too). Nothing on brass. A longer sound would need another technique, not removing the cap.
+    - Parked: no dataset adds a second orchestra with slow wind staccatos (searched: CANDIDATES.md lists what has none).
 
 ---
 
