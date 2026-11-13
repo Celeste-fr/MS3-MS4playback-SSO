@@ -568,7 +568,11 @@ Where `sectionLevel2` comes from (`tools/soundlibraries/section_balance_cl.py` w
   the four string instruments, whose mean is the zero, exclude 0 in 3 of 8 cases (medians up to ±4.0 dB). The horns and
   trumpets are clear in both recordings (-7.6 / -9.0 and -4.2 / -5.1 dB). The flutes and oboes are marginal: the flute's
   Aalto value (+3.2) and the oboe's (-2.0) lie inside that scatter of the strings, and the oboe's recordings differ by
-  4.4 dB, more than the clarinet's 3.6, which was not applied. Piccolo, Alto Flute, Bass
+  4.4 dB, more than the clarinet's 3.6, which was not applied. A third dataset (Spheres K. 550 / I + Romeo and Juliet, 2026-11-13, the owner's checked readings) doesn't settle
+  them: flute +3.58 (Aalto +3.21, TU +4.76; mean of three +3.85, t 90 % [+2.49, +5.21]), oboe -1.32 (mean of its 4
+  parts 0.0 [-3.0, +3.0]), but every Spheres wind reads ~3-4 dB high against its strings (separate sessions, gains
+  undocumented): corrected for that, the flute's support goes and the oboe's returns. Both stay as applied, **marginal
+  alike** (the owner, 2026-11-13: "reasonable"; BALANCE_LOG.md › Spheres flute and oboe). Piccolo, Alto Flute, Bass
   Flute take the flute's shift and Cor Anglais the oboe's: **an assumption** ("plays like its family"; neither recording
   has them). The harp's and the Grand Piano's offsets to this scale were left as they are (the harp's median over the
   solo winds would move -3.4 dB with the shifted winds, the piano's -0.1: BALANCE_LOG.md › Iteration 15).

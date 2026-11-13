@@ -220,7 +220,7 @@ changes one tick after their chord; the technique comes from the notation.
   - `[levels] sectionBalance` 2 (the Clark & Luce balance; the owner: levels from real data): `<Instrument sectionLevel2>` from
     Clark & Luce 1965 as sound power, TU Berlin's directivity and the SSO side (`section_balance_cl.py` →
     `sso_cl_section_balance.json` → `SECTION_LEVEL2`), plus `ANECHOIC_SHIFT` (flutes, oboes, horns, trumpets; flutes and oboes
-    marginal, n = 2). Siblings, gap patches, harp, timpani, piano etc. are assumptions or single sources: › Section balance and
+    marginal: n = 2, a third set, Spheres, can't settle them, kept alike 2026-11-13). Siblings, gap patches, harp, timpani, piano etc. are assumptions or single sources: › Section balance and
     docs/BALANCE_LOG.md. 1 = the TU Berlin balance (`<Instrument sectionLevel>`).
   - `[levels] realRange` 2 (the owner: "let's use the section data wherever it's reliable"): each note plays a real player's
     change from mp at the written CC1 less SSO's own, by CC11: steps x S / 5, S the map's `<Instrument realSteps>` (Clark &

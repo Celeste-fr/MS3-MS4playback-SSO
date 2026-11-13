@@ -599,3 +599,31 @@ Re-running the scripts on the old files reproduced the shipped outputs exactly b
   sectionLevel2 move by at most 0.54 dB (Oboe Solo), so a Vial Long stays as loud as SSO's (`tst_liveequivalence::vialLevels`).
 - Sources and method as before; only the sampling of the SSO curves is finer. Measured on the Windows VM earlier; this
   is a recomputation on Linux, nothing heard.
+
+## Spheres flute and oboe, a third dataset (2026-11-13)
+
+Question: do the in-context flute (+3.96 in the map from +3.98 measured) and oboe (-4.17) shifts of Iteration 15, each
+resting on two anechoic recordings (TU clear, Aalto inside the strings' scatter), hold against a third, Spheres
+(multitrack sections: Mozart K. 550 / I bars 1-299, Tchaikovsky Romeo and Juliet pp. 4, 41-43, 106-108)? Same definition
+as docs/RESEARCH.md › 1.5a (per player, against the strings at the same written marking, less the unshifted map); a
+decision rule written before any Spheres level was computed (KEEP / MOVE / REMOVE by clear datasets, null band B =
+max(2 dB, the strings' own scatter)); the extension to R&J and bars 101-299 was ordered after the first look (disclosed).
+Readings: 87 items checked by the owner (2026-11-13; all 3 planted errors caught, controls ok; two corrections, neither
+moving a segment). Two stats-auditor passes.
+
+| dB per player | Aalto | TU B8 | Spheres | mean of 3, t 90 % | applied |
+|---|---|---|---|---|---|
+| flute | +3.21 | +4.76 | +3.58 (3 parts: +4.35 [+2.86, +5.84]) | +3.85 [+2.49, +5.21] | +3.98 |
+| oboe | -1.98 | -6.37 | -1.32 (4 parts: 0.0 [-3.0, +3.0]) | -3.22 [-7.85, +1.40] | -4.17 |
+
+The rule, as written (pooled band 2.0 dB), gives flute KEEP and oboe REMOVE. But every Spheres wind (clarinet, bassoon,
+horn too, readings unchecked) reads ~3-4 dB higher against the strings than in the anechoic sets (+3.96 from clarinet,
+bassoon and horn); the strings and winds were recorded in separate sessions with undocumented gains. Corrected by that
+(non-circular) offset, Spheres gives flute -0.38 and oboe -5.28, and the rule flips: flute REMOVE, oboe nearer KEEP. A
+per-piece band also gives flute REMOVE. Flute - oboe (mean +7.1 [+1.2, +13.0], n 3) fits both oboe 0 and -4.17. So
+Spheres can't decide either shift until its session gain is documented; real orchestras already differ by as much (the
+oboe's two anechoic values 4.4 dB apart).
+
+**Decision** (the owner, 2026-11-13, "reasonable"): both shifts stay as applied, marked marginal alike; no further work
+unless new data (Spheres' session gains, or another multitrack session with winds). Nothing in the map changes. Analysis
+files are private (not in the repo).
