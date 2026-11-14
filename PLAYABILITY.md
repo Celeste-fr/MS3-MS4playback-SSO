@@ -567,68 +567,115 @@ below is one the code already had, with its source). Test `falseAlarms2` (falsea
 ## Accordion, A1-A7 (2026-11-13)
 
 The owner approved the checks and their colours (2026-11-13), on one condition: red only for what no accordion can
-play; anything a player could manage some way is dark yellow at most. Sources: Blatter 1997 pp. 295-298 (and p. 244
-for the keyboard span), Sevsay, The Cambridge Guide to Orchestration p. 136; the other books in the studies folder have
-no accordion material (`~/MuseScore/orchestration-checker/research/accordion-sources.md`). Every number below was
-checked against the printed page. Sevsay writes pitches in Helmholtz names (c' = C4; "1E" = E1). Code:
-`Pass::checkAccordion`, `Pass::checkBellows`, `Pass::accordionFreeBass`; limits in `playabilityrules.h` (Accordion).
-Test `accordion` (`accordion-tests.mscx`, `accordion-switch.mscx` from `tools/playability/gen_accordion_tests.py`).
+play; anything a player could manage some way is dark yellow at most. A critic review the same day
+(`~/MuseScore/orchestration-checker/research/accordion-critic.md`) found red and warnings on playable music; the fixes
+are below, and **the only accordion red left is A1 outside E2-E7**. Sources: Blatter 1997 pp. 295-298 (and p. 244 for
+the piano's span), Sevsay, The Cambridge Guide to Orchestration p. 136; the other books in the studies folder have no
+accordion material (`~/MuseScore/orchestration-checker/research/accordion-sources.md`). Every number below was checked
+against the printed page, or is marked *derived* with its derivation. Sevsay writes pitches in Helmholtz names (c' = C4;
+"1E" = E1). Code: `Pass::checkAccordion`, `Pass::checkBellows`, `Pass::accordionBass`; limits in `playabilityrules.h`
+(Accordion). Test `accordion` (`accordion-tests.mscx`, `accordion-switch.mscx` from
+`tools/playability/gen_accordion_tests.py`, whose header lists every bar and its expected rows).
+
+| Check | Red | Dark yellow | Notation (teal) |
+|---|---|---|---|
+| A1 right-hand range (key) | outside E2-E7 | outside F3-A6 | — |
+| A2 right-hand span | — | over a 10th (17+ semitones) | — |
+| A3 Stradella chord no button | — | 3+ pitch classes, no symbol | — |
+| A4 Stradella bass notation | — | — | chord notes without a symbol; a bass note in two octaves |
+| A5 bellows | — | over 4 s held at f+ with full chords | — |
+| A6 free-bass range | — | outside E1-C#6 | — |
+| A7 notes at once | — | more than 5, right hand | — |
 
 - **Which parts**: instrument id `keyboard.accordion` (MuseScore's "accordion"), else the name: accordion, accordéon,
-  Akkordeon, fisarmonica, bayan, bajan, button accordion (plurals too). Bandoneon and concertina are left out (their
-  ids, or the name). An accordion is not a keyboard for K1 (`isKeyboard`); it is checked before the keyboards, so a
-  part named "accordion" is one whatever its id. An accordion is one player; a plural name ("Accordions") is read as
-  several players each doing the same, so nothing changes. The upper staff is the right hand, the lower staff the left
-  (cross-staff moves and L.H. / R.H. texts followed, as for K1); a one-staff part has a right hand only. Only struck
-  notes count (tied continuations do not), hidden notes are not played. The panel shows the chord's notes only (no
-  keyboard strip: the left hand is buttons).
-- **Standard or free bass**: standard (Stradella) unless the part name or any staff text in the part says free bass /
-  free-bass / freebass / bayan / bajan / converter / melodic bass (the whole part then), or the score's switch is on:
-  *Free-Bass Accordion* in the Playability panel, beside the other two boxes, shown only when the score has an
-  accordion. It sets the metaTag `playabilityFreeBass` = 1 on the master score (saved in the file, kept by MuseScore
-  3.6, removed when off), for every accordion of the score; undoable (`ChangeAccordionFreeBass`), action
-  `toggle-accordion-free-bass`. No per-part switch: MuseScore has no natural per-part place for it, and the name or a
-  staff text already gives a single part its kind.
-- **A1 right-hand range** (`accordionRange`): red outside E2-E7, the union of every model Sevsay p. 136 gives (piano
-  accordion f-a''' and e-c'''', button accordion a-e'''' and E-c#''''): no accordion in the sources has such a key.
-  Dark yellow outside F3-A6: the concert piano accordion's 41 keys (Sevsay's f-a'''; Blatter p. 295: 41 keys, and F3-A6
-  is exactly 41), since larger piano and button accordions reach further. Grace notes too. Register shifts (Blatter
-  pp. 295-296) change the octave sounding, not the key pressed: the written note is the key.
+  acordeón (Blatter p. 295's name table), Akkordeon, akordeon, fisarmonica, bayan, bajan, button accordion, the Cyrillic
+  аккордеон and баян (plurals too). Bandoneon and concertina are left out (their ids, or the name). An accordion is not
+  a keyboard for K1 (`isKeyboard`); it is checked before the keyboards, so a part named "accordion" is one whatever its
+  id. An accordion is one player; a plural name ("Accordions") is read as several players each doing the same, so
+  nothing changes. Only struck notes count (tied continuations do not), hidden notes are not played. The panel shows
+  the chord's notes only (no keyboard strip: the left hand is buttons).
+- **Which hand** (our reading, kept simple): a note belongs to the staff it is written on, as MuseScore keeps a
+  cross-staff note in its own staff's track (a right-hand chord shown on the lower staff stays the right hand's), or
+  to the hand an L.H. / R.H. text gives it (as for K1). The first staff is the right hand. With two staves the second
+  is the left hand; with three or more, each later staff is the left hand if it starts in a bass clef, else a right
+  hand (RH over two staves, or RH + Stradella + free bass). A **one-staff part** is the left hand when it starts in a
+  bass clef or is named for the bass ("bass accordion", "Bassakkordeon"), else the right hand. A one-staff left hand is
+  read as a Stradella bass unless it is marked free bass (below), so a single-line bass part on a standard-bass
+  instrument gets A4 rows for notes above the D line.
+- **Standard or free bass**: standard (Stradella) unless marked. The part starts free bass when its name says free
+  bass / free-bass / freebass / converter / melodic bass / M III / MIII / M.III / Manual III (Sevsay's "manual III") /
+  Melodiebass / Einzeltonbass, or when the score's switch is on: *Free-Bass Accordion* in the Playability panel, beside
+  the other two boxes, shown only when the score has an accordion. It sets the metaTag `playabilityFreeBass` = 1 on the
+  master score (saved in the file, kept by MuseScore 3.6, removed when off), for every accordion of the score; undoable
+  (`ChangeAccordionFreeBass`), action `toggle-accordion-free-bass`. A name that names the standard bass wins over the
+  switch. A **staff text** in the part switches from its tick on: a free-bass word to free bass, a negation back to
+  the standard bass ("converter off", "free bass off", "no free bass", "standard bass", "Stradella", "M II", "Manual II";
+  a negation wins over a free-bass word in the same text, so "M II (converter off)" is standard). "Bayan" is an
+  accordion but not a free-bass marking: bayans are built with either bass. No per-part switch: MuseScore has no
+  natural per-part place for it, and the name or a staff text already gives a single part its kind.
+- **A1 right-hand range** (`accordionRange`), on the **key**: the note without ottava lines (`Note::pitch()`; the
+  accordion does not transpose). Register shifts (Blatter pp. 295-296) change the octave sounding, not the key
+  pressed, so a G6 under an 8va line is key G6 with the octave-higher reeds, and is clean. Red outside E2-E7, the union
+  of every model Sevsay p. 136 gives (piano accordion f-a''' and e-c'''', button accordion a-e'''' and E-c#''''): no
+  accordion in the sources has such a key. Dark yellow outside F3-A6: the concert piano accordion's 41 keys (Sevsay's
+  f-a'''; Blatter p. 295: 41 keys, and F3-A6 is exactly 41), since larger piano and button accordions reach further.
+  Grace notes too. The row names the notes as they sound (as every row does).
 - **A2 right-hand span** (`accordionSpan`): the right hand alone, no division with the left (the left hand plays
-  buttons). K1's limits (Blatter p. 244: over a 9th dark yellow, over a 10th red); Blatter p. 296: the keys are a little
-  smaller than a piano's, so a 10th is playable, which supports the same red limit. An arpeggio exempts, as for K1.
+  buttons). Dark yellow over a 10th (more than 16 semitones, the major 10th included as playable), **never red**:
+  Blatter p. 296 says the accordion's keys are a little smaller than the piano's, so a 10th is playable, and no source
+  gives an accordion span no hand can reach. (K1's piano limits, Blatter p. 244, do not carry over: there a 10th is
+  rare.) An arpeggio or a cluster exempts.
+- **Clusters** (our definition, after Sevsay p. 136, who names "cluster chords" among the accordion's best-loved
+  effects): 3 or more different notes struck together in the right hand, every neighbouring gap 2 semitones or less (a
+  chromatic or white-key cluster, played with the palm or forearm). A cluster is exempt from A2 and A7, as an arpeggio is.
 - **A7 notes at once** (`accordionNotes`): more than 5 different notes struck together in the right hand, dark yellow.
-  Derived (five fingers; no book gives a number); not red, since a thumb can take two adjacent keys. An arpeggio
-  exempts.
+  Derived (five fingers; no book gives a number); not red, since a thumb can take two adjacent keys (Blatter p. 244).
+  An arpeggio or a cluster exempts.
 - **A3 Stradella chords** (`accordionChord`, standard bass only): the left-hand notes written above the D line (the
-  bass clef's middle line; compared by diatonic step as written, so E♭3 is above, D♯3 on it) struck together, with no
-  chord symbol at that moment, whose pitch-class set (2 or more classes) is not a major triad, minor triad, dominant
-  7th (with or without the fifth: Blatter p. 297 says the button's 7th chord has none) or diminished 7th: dark yellow.
-  One button gives each of those four (Blatter pp. 296-297; Sevsay p. 136); anything else needs buttons combined, which
-  players do, so never red. A chord symbol present: the symbol names the button and the written notes are its
-  shorthand, not checked.
+  bass clef's middle line; compared by diatonic step as written, so E♭3 is above, D♯3 on it; an ottava line does not
+  move them) struck together, with no chord symbol in force, whose pitch-class set (3 or more classes) is not a major
+  triad, minor triad, dominant 7th (with or without the fifth: Blatter p. 297 says the button's 7th chord has none) or
+  diminished 7th: dark yellow. One button gives each of those four (Blatter pp. 296-297; Sevsay p. 136); anything else
+  needs buttons combined, which players do, so never red. Two notes are not checked (derived: they may be a button's
+  chord written short; Blatter p. 296 fn. 22 says its voicing need not concern the orchestrator). With a chord symbol
+  in force, the symbol names the button and the written notes are its shorthand, not checked.
+- **Chord symbols** (A3, A4): a chord symbol (Harmony) anywhere in the part, or a staff text on a left-hand staff that
+  is one of Blatter p. 297's letters M, m, 7, d, dim (also maj, min) or a root with one ("Cm", "C7", "Cdim", "CM", "F#m",
+  "Bb7"). A root letter alone is not read (it may be a section letter). A symbol **stays in force** until the next
+  symbol or until the left hand stops sounding (a rest in the left hand), so in the oom-pah layout a symbol over the
+  bass note on beat 1 covers the chords on the off-beats. The first chord notes written under a symbol are its notes:
+  after the symbol has ended, repeating them alone repeats the chord (Blatter p. 297, Ex. 6.37). Chord-symbol
+  qualities are not parsed: any symbol names some button.
 - **A4 Stradella bass notation** (`accordionNotation`, a notation kind, teal): notes above the D line with no chord
-  symbol and not a repeat of the last symbol's notes (Blatter p. 297, Ex. 6.36-6.37: notes on the D line and below are
-  single bass notes, the third space and above chords that carry a symbol; repeating the note alone repeats the
-  chord). This also covers a single note written above the D line meant as a bass note. And two bass notes of one name
-  (same spelling) in different octaves, on or below the D line, struck together: the bass reeds sound a note in several
-  octaves at once and the octave is the bass shift's (Sevsay p. 136; Blatter p. 296), so the second octave is a writing
-  problem, not an impossible sound. Neither is red.
+  symbol in force and not a repeat of the last symbol's notes (Blatter p. 297, Ex. 6.36-6.37: notes on the D line and
+  below are single bass notes, the third space and above chords that carry a symbol). This also covers a single note
+  written above the D line meant as a bass note. And two bass notes of one name (same spelling) in different octaves,
+  on or below the D line, struck together: the bass reeds sound a note in several octaves at once and the octave is the
+  bass shift's (Sevsay p. 136; Blatter p. 296); *derived* as a notation problem (no source calls it an error), not an
+  impossible sound. Neither is red. A written triad that is exactly a button shape is still a row (Blatter p. 297
+  asks for the symbol); kept as it is (critic M7).
 - **A5 bellows** (`accordionBellows`): Blatter p. 298, at full loudness with full chords one bellows stroke lasts about
   4 s, and the direction cannot change without re-attacking the notes. A passage is a stretch in which the part plays
-  at f or louder (the louder of its two staves' dynamics and hairpins, `levelAt` / `isLoud`, the same reading as the
-  bowing checks) with 3 or more notes sounding in the right hand and a left-hand chord sounding (on a Stradella bass a
-  note above the D line, a chord button; on a free bass 3 or more notes). It ends at a **break**, a moment where nothing
-  sounds on either staff (a rest in every voice of both), or where the music stops being loud with full chords (softer
-  or thinner, the stroke lasts longer: Blatter p. 298, no number). Longer than 4 s by the tempo map: dark yellow, one
-  row over the passage; the chords struck after the 4 s are marked (the first chord if none is). Never red: a player
-  can re-attack to change direction.
-- **A6 free-bass left hand** (`accordionFreeBass`): red outside E1-C#6, Sevsay p. 136's single bass register (1E-c#''')
-  of the 185-button combination model, the only free-bass range in the sources. A3 and A4 do not apply to a free bass.
+  at f or louder (the louder of its staves' dynamics and hairpins, `levelAt` / `isLoud`, the same reading as the bowing
+  checks) with full chords: 3 or more notes sounding in the right hand (*derived*: Blatter gives no count; a unison in
+  two voices counts twice, and a full registration of many reeds is not read) and a left-hand chord sounding (on a
+  Stradella bass a note above the D line, a chord button; on a free bass 3 or more notes). It ends at a **break** (a
+  moment where nothing sounds in either hand), at a **re-attack** (a moment where every note sounding is struck anew,
+  none held or tied across it: the chance to change direction), or where the music stops being loud with full chords
+  (softer or thinner, the stroke lasts longer: Blatter p. 298, no number). A staccato chord sounds half its value
+  (*derived*), so staccato chords leave gaps. So only an unbroken sustained or tied stretch warns. Longer than 4 s by the
+  tempo map: dark yellow, one row over the passage; the chords struck after the 4 s are marked (the first chord if none
+  is). Never red: a player can re-attack to change direction. Limitation (critic M5): the loudness is read where notes
+  start and end, so a dynamic or hairpin inside a held chord is not seen.
+- **A6 free-bass left hand** (`accordionFreeBass`): dark yellow outside E1-C#6, on the sound (an ottava line
+  counts). That is Sevsay p. 136's single bass register (1E-c#''') of the 185-button combination model, the only
+  free-bass range in the sources: one model's range shows what that model has, not that no free-bass instrument has a
+  lower or higher note, so it cannot be red. A3 and A4 do not apply to a free bass.
 
 **Not checked (no source):** the Stradella left hand's range (Blatter's p. 297 staves are too small to read reliably;
 Sevsay gives none), chord-symbol qualities other than the four (a symbol is not parsed), bass and chord buttons combined,
 left-hand reach between rows, the counterbass row (the books disagree on its pitch: Blatter p. 296 a leading tone,
-Sevsay p. 136 a third), register-shift timing, fast repeated notes, Sevsay's warning about air pressure on one or two
-keys (no limit), a converter instrument switching between kinds mid-piece (a free-bass text makes the whole part free
-bass), bandoneon and concertina.
+Sevsay p. 136 a third), register-shift timing (Blatter p. 296: a continuous run over the whole total range needs a stop
+to press a shift), fast repeated notes, Sevsay's warning about air pressure on one or two keys (no limit), bandoneon and
+concertina. Diatonic (bisonoric) accordions named "... accordion" get the Stradella checks; Sevsay p. 136 treats them
+separately and gives them no range.

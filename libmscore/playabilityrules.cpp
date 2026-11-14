@@ -1256,8 +1256,9 @@ bool isHarp(const QString& id, const QString& name)
 
 bool isAccordion(const QString& id, const QString& name)
       {
-      static const QRegularExpression NAME(QString::fromUtf8("accordion|accord[eé]on|akkordeon|fisarmonic|\\bba[yj]an"),
-                                           QRegularExpression::CaseInsensitiveOption);
+      static const QRegularExpression NAME(QString::fromUtf8("accordion|accord[eé]on|acorde[oó]n|akk?ordeon|fisarmonic|\\bba[yj]an"
+                                                             "|аккордеон|баян"),
+                                           QRegularExpression::CaseInsensitiveOption | QRegularExpression::UseUnicodePropertiesOption);
       static const QRegularExpression OTHER("bandone|concertina", QRegularExpression::CaseInsensitiveOption);
       if (id == "keyboard.accordion" || id == "accordion")
             return true;
@@ -1266,11 +1267,31 @@ bool isAccordion(const QString& id, const QString& name)
       return NAME.match(name).hasMatch() && !OTHER.match(name).hasMatch();
       }
 
-bool freeBassText(const QString& text)
+bool bassAccordionName(const QString& name)
       {
-      static const QRegularExpression FREE("free[\\s-]?bass|\\bba[yj]an|converter|melodic\\s+bass",
+      static const QRegularExpression BASS(QString::fromUtf8("\\bbass[\\s-]?(accordion|accord[eé]on|akk?ordeon)|bassakkordeon"),
                                            QRegularExpression::CaseInsensitiveOption);
-      return FREE.match(text).hasMatch();
+      return BASS.match(name).hasMatch();
+      }
+
+int freeBassText(const QString& text)
+      {
+      static const QRegularExpression STANDARD("stradella|standard[\\s-]?bass|\\b(no|without|ohne)\\s+(free|frei|converter|konverter)"
+                                               "|\\bm\\.?\\s?ii\\b|\\bmanual\\s+ii\\b"
+                                               "|(free[\\s-]?bass|converter|konverter|m\\.?\\s?iii|melodiebass|einzeltonbass)\\W*(off|aus)\\b",
+                                               QRegularExpression::CaseInsensitiveOption);
+      static const QRegularExpression FREE("free[\\s-]?bass|[ck]onverter|melodic\\s+bass|\\bm\\.?\\s?iii\\b|\\bmanual\\s+iii\\b"
+                                           "|melodiebass|einzelton",
+                                           QRegularExpression::CaseInsensitiveOption);
+      if (STANDARD.match(text).hasMatch())
+            return -1;
+      return FREE.match(text).hasMatch() ? 1 : 0;
+      }
+
+bool chordSymbolText(const QString& text)
+      {
+      static const QRegularExpression SYMBOL(QString::fromUtf8("^(?:[A-G](?:#|b|♯|♭)?)?(?:M|m|7|d|dim|maj|min)$"));
+      return SYMBOL.match(text.simplified()).hasMatch();
       }
 
 StradellaChord stradellaChord(int mask)

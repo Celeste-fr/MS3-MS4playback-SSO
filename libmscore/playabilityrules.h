@@ -407,20 +407,30 @@ bool isHarp(const QString& instrumentId, const QString& name);
 bool isTimpani(const QString& instrumentId, const QString& name);
 
 //---------------------------------------------------------
-//   Accordion, A1-A7 (owner-approved 2026-11-13; sources: Blatter 1997 pp. 295-298, Sevsay p. 136;
-//   PLAYABILITY.md "Accordion"). Red only where no accordion can play it: A1 outside every model's
-//   right-hand range, A2 a right-hand span over a 10th, A6 a free-bass note outside its register.
+//   Accordion, A1-A7 (owner-approved 2026-11-13, revised after the critic review the same day; sources:
+//   Blatter 1997 pp. 295-298, Sevsay p. 136; PLAYABILITY.md "Accordion"). Red only where no accordion can play
+//   it: A1 outside every model's right-hand keys is the only red. Everything else is dark yellow (A2 a span over
+//   a 10th, A3, A5, A6, A7) or a notation row (A4).
 //   Pitches are MIDI numbers (C4 = 60); Sevsay's Helmholtz names: c' = C4, 1E = E1.
 //---------------------------------------------------------
 
-// A1 right-hand range. Red outside the union of every model Sevsay p. 136 gives (piano accordion f-a''' and
-// e-c''''; button accordion a-e'''' and E-c#''''): E2-E7. Dark yellow outside the concert piano accordion's
-// 41 keys, f-a''' (Sevsay p. 136; Blatter p. 295, 41 keys: F3-A6 is exactly 41 keys)
+// A1 right-hand range, read on the key (the pitch without ottava lines). Red outside the union of every model
+// Sevsay p. 136 gives (piano accordion f-a''' and e-c''''; button accordion a-e'''' and E-c#''''): E2-E7. Dark
+// yellow outside the concert piano accordion's 41 keys, f-a''' (Sevsay p. 136; Blatter p. 295, 41 keys: F3-A6 is
+// exactly 41 keys)
 constexpr int ACCORDION_RH_LO = 40;                 // E2
 constexpr int ACCORDION_RH_HI = 100;                // E7
 constexpr int ACCORDION_RH_CONCERT_LO = 53;         // F3
 constexpr int ACCORDION_RH_CONCERT_HI = 93;         // A6
-// A2 right-hand span: K1's KEYBOARD_NINTH / KEYBOARD_TENTH (Blatter p. 244; p. 296: a 10th is playable)
+// A2 right-hand span: dark yellow over a 10th, never red. Blatter p. 296: the accordion's keys are a little smaller
+// than the piano's, so a 10th is playable; no source gives a span no hand can reach on the accordion. The 10th
+// is up to the major 10th, inclusive (KEYBOARD_TENTH, 16 semitones)
+constexpr int ACCORDION_SPAN_WARN = KEYBOARD_TENTH;
+// A2 / A7 cluster (our definition, after Sevsay p. 136's "cluster chords" among the accordion's effects): 3 or more
+// different notes struck at once in the right hand, every neighbouring gap at most 2 semitones; exempt like an
+// arpeggio
+constexpr int ACCORDION_CLUSTER_NOTES = 3;
+constexpr int ACCORDION_CLUSTER_GAP = 2;
 // A7 more than this many notes struck at once in the right hand: dark yellow. Derived (five fingers; a thumb can
 // take two adjacent keys, so not red); no book gives a number
 constexpr int ACCORDION_RH_FINGERS = 5;
@@ -428,21 +438,35 @@ constexpr int ACCORDION_RH_FINGERS = 5;
 // bass notes, notes in the third space (E3) and above are chord buttons with a symbol. Compared by diatonic step,
 // as written (an Eb3 is in the E space, a D#3 on the D line).
 constexpr int ACCORDION_D_LINE_PITCH = 50;          // D3 (with tpc 16, D)
+// A3 checks sets of 3 or more pitch classes only: two notes may be a button's chord written short (Blatter p. 296,
+// fn. 22: the button's voicing need not concern the orchestrator). Derived
+constexpr int ACCORDION_CHORD_MIN_PCS = 3;
 // A5 bellows (Blatter p. 298): at full loudness with full chords one stroke sustains about four seconds
 constexpr double ACCORDION_BELLOWS_SECONDS = 4.0;
-constexpr int ACCORDION_FULL_RH = 3;                // "full chords": 3+ notes sounding in the right hand
-// A6 free-bass left hand (Sevsay p. 136, the 185-button combination model's single bass register, 1E-c#''')
+constexpr int ACCORDION_FULL_RH = 3;                // "full chords": derived, 3+ notes sounding in the right hand
+// A6 free-bass left hand, dark yellow (Sevsay p. 136, the 185-button combination model's single bass register,
+// 1E-c#''': one model's range, the only free-bass range in the sources)
 constexpr int ACCORDION_FREE_LO = 28;               // E1
 constexpr int ACCORDION_FREE_HI = 85;               // C#6
-// the score's switch (a metaTag, saved in the file; "1": every accordion part of the score is free-bass)
+// the score's switch (a metaTag, saved in the file; "1": every accordion part of the score starts free-bass)
 constexpr const char* ACCORDION_FREE_BASS_TAG = "playabilityFreeBass";
 
 // an accordion: MusicXML id keyboard.accordion (MuseScore's "accordion"), else by name (accordion, accordéon,
-// Akkordeon, fisarmonica, bayan, bajan, button accordion; plural too). Bandoneon and concertina are not.
+// acordeón, Akkordeon, akordeon, fisarmonica, bayan, bajan, button accordion, the Cyrillic аккордеон / баян;
+// plural too). Bandoneon and concertina are not.
 bool isAccordion(const QString& instrumentId, const QString& name);
-// a free-bass accordion named in a part name or a staff text: free bass / free-bass / freebass / bayan / bajan /
-// converter / melodic bass
-bool freeBassText(const QString& text);
+// a one-staff accordion part named for the bass (bass accordion, Bassakkordeon) is a left hand
+bool bassAccordionName(const QString& name);
+// a free-bass marking in a part name or a staff text: 1 free bass (free bass / free-bass / freebass / converter /
+// melodic bass / M III / MIII / M.III / Manual III / Melodiebass / Einzeltonbass), -1 standard bass (a negation or
+// the standard bass named: converter off, no free bass, standard bass, Stradella, M II, Manual II, ... off / aus),
+// 0 neither. A negation wins over a free-bass word in the same text ("M II (converter off)" is -1). "Bayan" is
+// neither: bayans are built with either bass.
+int freeBassText(const QString& text);
+// a chord symbol written as staff text on the left-hand staff (Blatter p. 297's M, m, 7, d, dim, and the common
+// root-and-quality forms Cm, C7, Cdim, CM, F#m, Bb7, ...). A root letter alone is not one (it may be a section
+// letter)
+bool chordSymbolText(const QString& text);
 // a pitch-class set (bit 0 = C) one Stradella chord button gives (Blatter pp. 296-297; Sevsay p. 136): a major or
 // minor triad, a dominant 7th (Blatter p. 297: the button's 7th has no fifth; written with or without it), a
 // diminished 7th
