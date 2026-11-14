@@ -587,7 +587,7 @@ the Lua standalone check.
   pins some settings unless a test sets them (plainPerformance 0, lowCut 1), so older tests keep their expectations.
 - `tst_playbackaudit`: 14 passed, 1 skipped (`auditScore` needs `MS_AUDIT_SCORE`: VERIFY.md › Playback audit). Baseline, Whence
   (quarter tones), Recommended, 2026-10-29: ARRIVAL 33 fail / 7 warn, LEVEL STEP 26 info, every other kind 0 (the heard check on
-  the real sound, build 491: 35 fail / 19 warn).
+  the real sound, build 491: 35 fail / 19 warn; build 564, 2026-11-13: 32 fail / 20 warn, no regression, one take).
 - `tst_liveequivalence` (links mscoreapp; uses tst_soundlibrary's test synth): 96 passed, 5 skipped (2026-11-12, with libraryChangeDuringLoad's three rows) (tools, not tests:
   `dumpEvents`, `utilitySet`, `scriptValuesSet`, `chunkCompare`; `twoLibraries` without `MS_VIAL_VST3`). `dumpEvents` takes
   `MS_DUMP_SCORE`, `MS_DUMP_MAP`, `MS_DUMP_OUT`, `MS_DUMP_SETTINGS`, `MS_DUMP_CHUNKED` (renders as playback does), `MS_DUMP_LIVE`
