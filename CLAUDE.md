@@ -25,8 +25,9 @@ CI history): `docs/HISTORY.md`, read only when you need the background of a topi
   `tools/roundtrip/portable_fork.sh`) (XML, PNG pages, MIDI). Where 3.7 reads or writes
   differently, follow 3.6 (legacy style defaults, `MStyle::isDefault` within 1e-6, `MStyle::notInMuseScore36`,
   tuplet `<Number>`, `updateInstrumentId`). New per-score state goes in **metaTags** (3.6 keeps them), left out
-  when default. Known leftover: some MuseScore 1/2 imports' XML changes once (pages, MIDI identical). (MIDI
-  export's same-instant order came from `ms4Parts`' pointer order, fixed 2026-10-04; round trip not re-run.)
+  when default. Known leftover: some MuseScore 1/2 imports' XML changes once (pages, MIDI identical). Last run 2026-11-13 (main aa50dc52c5, 135 scores: 3 per mtest folder + the
+  owner's test scores): 130 identical, 4 XML-only (the leftover above; compat206 articulations-double loses pagePrintableWidth),
+  MIDI identical everywhere; layout/goldberg.mscx can't run (saved by a 3.0 developer version: 3.6.2 refuses it too).
 - **Readings of music go on a review page**: when work relies on an agent's reading of sheet music, a legend, a
   screenshot of a plug-in's key/articulation list or a contact sheet, publish a claude.ai artifact with each
   source picture (or crop) next to the reading and its use, before it changes code or the map. Symbols in
