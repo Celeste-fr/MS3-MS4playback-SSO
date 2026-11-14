@@ -414,7 +414,7 @@ bool isTimpani(const QString& instrumentId, const QString& name);
 //   Pitches are MIDI numbers (C4 = 60); Sevsay's Helmholtz names: c' = C4, 1E = E1.
 //---------------------------------------------------------
 
-// A1 right-hand range, read on the key (the pitch without ottava lines). Red outside the union of every model
+// A1 right-hand range, read on the key (the written pitch: without ottava lines or an octave clef's sign). Red outside the union of every model
 // Sevsay p. 136 gives (piano accordion f-a''' and e-c''''; button accordion a-e'''' and E-c#''''): E2-E7. Dark
 // yellow outside the concert piano accordion's 41 keys, f-a''' (Sevsay p. 136; Blatter p. 295, 41 keys: F3-A6 is
 // exactly 41 keys)
@@ -436,7 +436,10 @@ constexpr int ACCORDION_CLUSTER_GAP = 2;
 constexpr int ACCORDION_RH_FINGERS = 5;
 // A3 / A4 Stradella bass notation (Blatter p. 297): notes on the bass clef's middle line (D3) and below are single
 // bass notes, notes in the third space (E3) and above are chord buttons with a symbol. Compared by diatonic step,
-// as written (an Eb3 is in the E space, a D#3 on the D line).
+// as written (an Eb3 is in the E space, a D#3 on the D line; an ottava line or an octave clef does not move a note).
+// A left-hand note shown in a G clef is not read as a Stradella bass (the convention is the bass clef's). A4 is
+// reported once per run of moments, a run ending at a left-hand silence of a whole bar or longer, a chord symbol or
+// a section break.
 constexpr int ACCORDION_D_LINE_PITCH = 50;          // D3 (with tpc 16, D)
 // A3 checks sets of 3 or more pitch classes only: two notes may be a button's chord written short (Blatter p. 296,
 // fn. 22: the button's voicing need not concern the orchestrator). Derived
@@ -469,7 +472,10 @@ int freeBassText(const QString& text);
 bool chordSymbolText(const QString& text);
 // a pitch-class set (bit 0 = C) one Stradella chord button gives (Blatter pp. 296-297; Sevsay p. 136): a major or
 // minor triad, a dominant 7th (Blatter p. 297: the button's 7th has no fifth; written with or without it), a
-// diminished 7th
+// diminished 7th; or 3+ pitch classes that are a subset of one button's notes, since the button sounds them all:
+// a diminished triad (part of the dim7 button, Blatter p. 297 / Sevsay p. 136; also a rootless dominant 7th),
+// root + fifth + 7th (part of the dominant 7th as written with its fifth). A triad's 3-note subsets are the triad
+// itself. Anything else (a major 7th, an added 6th, ...) is NONE
 enum class StradellaChord : char { NONE, MAJOR, MINOR, DOMINANT7, DIMINISHED7 };
 StradellaChord stradellaChord(int pitchClassMask);
 

@@ -1304,12 +1304,25 @@ StradellaChord stradellaChord(int mask)
             { (1 << 0) | (1 << 4) | (1 << 10), StradellaChord::DOMINANT7 },           // without the fifth (Blatter p. 297)
             { (1 << 0) | (1 << 3) | (1 << 6) | (1 << 9), StradellaChord::DIMINISHED7 } };
       mask &= 0xfff;
+      auto rotate = [](int bits, int root) { return ((bits << root) | (bits >> (12 - root))) & 0xfff; };
       for (int root = 0; root < 12; ++root)
-            for (const Shape& sh : SHAPES) {
-                  const int rotated = ((sh.bits << root) | (sh.bits >> (12 - root))) & 0xfff;
-                  if (rotated == mask)
+            for (const Shape& sh : SHAPES)
+                  if (rotate(sh.bits, root) == mask)
                         return sh.kind;
-                  }
+      // 3 or more pitch classes that one button sounds among others: a subset of its notes (the button sounds them
+      // all). Checked dim7 first, so a diminished triad (also a rootless dominant 7th) is read as part of the dim7
+      int pcs = 0;
+      for (int b = mask; b; b &= b - 1)
+            ++pcs;
+      if (pcs < ACCORDION_CHORD_MIN_PCS)
+            return StradellaChord::NONE;
+      static const Shape BUTTONS[] = {
+            { (1 << 0) | (1 << 3) | (1 << 6) | (1 << 9), StradellaChord::DIMINISHED7 },
+            { (1 << 0) | (1 << 4) | (1 << 7) | (1 << 10), StradellaChord::DOMINANT7 } };
+      for (int root = 0; root < 12; ++root)
+            for (const Shape& sh : BUTTONS)
+                  if ((mask & ~rotate(sh.bits, root)) == 0)
+                        return sh.kind;
       return StradellaChord::NONE;
       }
 

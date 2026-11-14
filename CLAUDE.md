@@ -596,7 +596,7 @@ the Lua standalone check.
   tunings.txt. `tst_liveintegration` 72 (2026-11-12, with scorePlaybackMode; pictures with `MS_LEADING_PNG`, `MS_LANE_PNG`, `MS_SOUND_LIBRARY_PNG`,
   `MS_CLIPBANDS_PNG`, `MS_CLIP_TEMPO_PNG`).
 - `tst_keysig` 8, `tst_tuning` 18, `tst_phrasemark` 19, `tst_marcatolevel` 14, `tst_performancetechnique` 26, `tst_tempochange`
-  4, `tst_timesig` 14, `tst_playability` 62 passed, 2 skipped (`speed` needs `PLAYABILITY_BIG`, `dump` `PLAYABILITY_DUMP`; run 2026-11-13, with `accordion` after the critic fixes),
+  4, `tst_timesig` 14, `tst_playability` 62 passed, 2 skipped (`speed` needs `PLAYABILITY_BIG`, `dump` `PLAYABILITY_DUMP`; run 2026-11-13, with `accordion` after the sweep fixes F1-F5),
   `tst_midi` 97 (its 3.x tests render with MuseScore 3.6's method, `ms3State`, against 3.6's references, changed only where the
   fork differs on purpose; `eventsMs4` against the fork's own `-ms4-ref.txt`: regenerate only for an intended change of the note
   model).

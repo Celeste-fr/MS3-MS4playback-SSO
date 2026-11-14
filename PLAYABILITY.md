@@ -582,7 +582,7 @@ against the printed page, or is marked *derived* with its derivation. Sevsay wri
 | A1 right-hand range (key) | outside E2-E7 | outside F3-A6 | — |
 | A2 right-hand span | — | over a 10th (17+ semitones) | — |
 | A3 Stradella chord no button | — | 3+ pitch classes, no symbol | — |
-| A4 Stradella bass notation | — | — | chord notes without a symbol; a bass note in two octaves |
+| A4 Stradella bass notation | — | — | chord notes without a symbol; a bass note in two octaves (one row per run) |
 | A5 bellows | — | over 4 s held at f+ with full chords | — |
 | A6 free-bass range | — | outside E1-C#6 | — |
 | A7 notes at once | — | more than 5, right hand | — |
@@ -613,9 +613,13 @@ against the printed page, or is marked *derived* with its derivation. Sevsay wri
   a negation wins over a free-bass word in the same text, so "M II (converter off)" is standard). "Bayan" is an
   accordion but not a free-bass marking: bayans are built with either bass. No per-part switch: MuseScore has no
   natural per-part place for it, and the name or a staff text already gives a single part its kind.
-- **A1 right-hand range** (`accordionRange`), on the **key**: the note without ottava lines (`Note::pitch()`; the
-  accordion does not transpose). Register shifts (Blatter pp. 295-296) change the octave sounding, not the key
-  pressed, so a G6 under an 8va line is key G6 with the octave-higher reeds, and is clean. Red outside E2-E7, the union
+- **A1 right-hand range** (`accordionRange`), on the **key**: the written note, without ottava lines (`Note::pitch()`;
+  the accordion does not transpose) and without an octave clef's sign (treble 8va / 8vb, bass 8vb, ...: MuseScore,
+  like MusicXML's `clef-octave-change`, keeps the sounding pitch under an octave clef, so the clef's octave is taken
+  off: `pitch() - 12 x octave change` of the clef in force on the staff the note is shown on). Register shifts
+  (Blatter pp. 295-296) change the octave sounding, not the key pressed, so a G6 under an 8va line is key G6 with the
+  octave-higher reeds, and is clean; an octave clef is the same device (a sweep of 30 real scores found a written F6
+  under a G8va clef read as a red F7). Red outside E2-E7, the union
   of every model Sevsay p. 136 gives (piano accordion f-a''' and e-c'''', button accordion a-e'''' and E-c#''''): no
   accordion in the sources has such a key. Dark yellow outside F3-A6: the concert piano accordion's 41 keys (Sevsay's
   f-a'''; Blatter p. 295: 41 keys, and F3-A6 is exactly 41), since larger piano and button accordions reach further.
@@ -632,10 +636,15 @@ against the printed page, or is marked *derived* with its derivation. Sevsay wri
   Derived (five fingers; no book gives a number); not red, since a thumb can take two adjacent keys (Blatter p. 244).
   An arpeggio or a cluster exempts.
 - **A3 Stradella chords** (`accordionChord`, standard bass only): the left-hand notes written above the D line (the
-  bass clef's middle line; compared by diatonic step as written, so E♭3 is above, D♯3 on it; an ottava line does not
-  move them) struck together, with no chord symbol in force, whose pitch-class set (3 or more classes) is not a major
-  triad, minor triad, dominant 7th (with or without the fifth: Blatter p. 297 says the button's 7th chord has none) or
-  diminished 7th: dark yellow. One button gives each of those four (Blatter pp. 296-297; Sevsay p. 136); anything else
+  bass clef's middle line; compared by diatonic step as written, so E♭3 is above, D♯3 on it; neither an ottava line
+  nor an octave clef moves them: the written position counts) struck together, with no chord symbol in force, whose
+  pitch-class set (3 or more classes) is not a major triad, minor triad, dominant 7th (with or without the fifth:
+  Blatter p. 297 says the button's 7th chord has none) or diminished 7th, **nor a subset of one button's notes**:
+  dark yellow. One button gives each of those four (Blatter pp. 296-297; Sevsay p. 136), and it sounds all its notes,
+  so 3+ classes inside one button's set are that button: a diminished triad is part of the dim7 button (it also reads
+  as a rootless dominant 7th, the common oom-pah voicing over a bass root), root + fifth + 7th is part of the
+  dominant 7th as the check accepts it written with its fifth (`stradellaChord`; a triad's 3-note subsets are the
+  triad itself). A major 7th, a minor 7th, an added 6th or a set with a semitone stays dark yellow. Anything else
   needs buttons combined, which players do, so never red. Two notes are not checked (derived: they may be a button's
   chord written short; Blatter p. 296 fn. 22 says its voicing need not concern the orchestrator). With a chord symbol
   in force, the symbol names the button and the written notes are its shorthand, not checked.
@@ -646,6 +655,11 @@ against the printed page, or is marked *derived* with its derivation. Sevsay wri
   bass note on beat 1 covers the chords on the off-beats. The first chord notes written under a symbol are its notes:
   after the symbol has ended, repeating them alone repeats the chord (Blatter p. 297, Ex. 6.37). Chord-symbol
   qualities are not parsed: any symbol names some button.
+- **G clef on the left hand** (F4 of the sweep): a left-hand note shown in a G clef (any treble clef, octave signs
+  too) at its tick is not read as a Stradella bass: A3 and A4 skip it while that clef is in force, since the D-line
+  convention is defined for the bass clef (Blatter p. 297). Typical: unmarked free bass or right-hand material moved
+  to the lower staff. A moment whose whole left hand is in a G clef ends an A4 run. (No single-notes-above-C4 guess:
+  such a staff stays a Stradella bass until marked free bass.)
 - **A4 Stradella bass notation** (`accordionNotation`, a notation kind, teal): notes above the D line with no chord
   symbol in force and not a repeat of the last symbol's notes (Blatter p. 297, Ex. 6.36-6.37: notes on the D line and
   below are single bass notes, the third space and above chords that carry a symbol). This also covers a single note
@@ -653,7 +667,17 @@ against the printed page, or is marked *derived* with its derivation. Sevsay wri
   on or below the D line, struck together: the bass reeds sound a note in several octaves at once and the octave is the
   bass shift's (Sevsay p. 136; Blatter p. 296); *derived* as a notation problem (no source calls it an error), not an
   impossible sound. Neither is red. A written triad that is exactly a button shape is still a row (Blatter p. 297
-  asks for the symbol); kept as it is (critic M7).
+  asks for the symbol); kept as it is (critic M7). **One row per run** (sweep F1/F5: an oom-pah left hand without
+  symbols gave a row on every chord, 384 rows for one finding in a 202-bar score): the moments that would each raise
+  the row on a part's left hand form a run, reported once, from its first moment to its last (`tick` / `tickEnd`),
+  named by the first moment's notes plus "…" when there are more, its reason ending "(n times in b bars from bar
+  x)"; every note of the run is still marked. A run ends at a **left-hand silence of a whole bar or longer** (no
+  left-hand note sounding for at least the length of the bar where the silence starts; shorter rests are the off-beat
+  gaps of an oom-pah, which in the sweep split runs bar by bar: calabrisella writes a rest on every beat 1, its bass in
+  another part), a **chord symbol** (one at a tick after the run's last moment), a **section break** (a
+  measure carrying one), a stretch of free bass, or a moment whose left hand is all in a G clef. Bass-only moments
+  and chords under a symbol in between do not end it. System (line) breaks are not boundaries: they move with the
+  layout and page size, a section break does not. The octave-doubling row runs the same way, separately.
 - **A5 bellows** (`accordionBellows`): Blatter p. 298, at full loudness with full chords one bellows stroke lasts about
   4 s, and the direction cannot change without re-attacking the notes. A passage is a stretch in which the part plays
   at f or louder (the louder of its staves' dynamics and hairpins, `levelAt` / `isLoud`, the same reading as the bowing
@@ -668,7 +692,10 @@ against the printed page, or is marked *derived* with its derivation. Sevsay wri
   is). Never red: a player can re-attack to change direction. Limitation (critic M5): the loudness is read where notes
   start and end, so a dynamic or hairpin inside a held chord is not seen.
 - **A6 free-bass left hand** (`accordionFreeBass`): dark yellow outside E1-C#6, on the sound (an ottava line
-  counts). That is Sevsay p. 136's single bass register (1E-c#''') of the 185-button combination model, the only
+  counts, and so does an octave clef: MuseScore's pitch under it is already the sound). Sevsay p. 136 gives the
+  register as plain pitches, with no octave sign or transposition, and Blatter p. 295 says the unison reed set sounds
+  the written pitch, so the range is read as sounding (our reading: neither book says outright whether the 1E-c#'''
+  is written or sounding). That is Sevsay p. 136's single bass register (1E-c#''') of the 185-button combination model, the only
   free-bass range in the sources: one model's range shows what that model has, not that no free-bass instrument has a
   lower or higher note, so it cannot be red. A3 and A4 do not apply to a free bass.
 

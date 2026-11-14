@@ -3910,6 +3910,28 @@ void Pass::checkAccordion(Part* part, const QString& staffName)
       for (PartMoment& m : moments)
             for (PartNote& pn : m.notes)
                   pn.hand = (pn.pinned ? pn.own >= 1 : leftStaff[std::min(std::max(pn.own, 0), nst - 1)]) ? 1 : 0;
+      // the clef in force where a note is shown (cross-staff moves followed)
+      auto clefOf = [&](const PartNote& pn) {
+            const int vs = std::min(std::max(pn.chord->vStaffIdx() - first, 0), nst - 1);
+            return part->staff(vs)->clef(pn.chord->tick());
+            };
+      // the written pitch: pitch() less the clef's octave sign (G8va, G8vb, F8vb, ...: MuseScore keeps the sounding
+      // pitch under an octave clef, as MusicXML's clef-octave-change asks); an ottava line is already out of pitch()
+      auto writtenShift = [&](const PartNote& pn) {
+            const ClefType ct = clefOf(pn);
+            return ct == ClefType::INVALID ? 0 : 12 * ClefInfo::octChng(ct);
+            };
+      // F4: a left-hand note shown in a G clef is not read as a Stradella bass (the D-line convention is the bass
+      // clef's, Blatter p. 297): A3 and A4 skip it while that clef is in force
+      auto trebleClef = [&](const PartNote& pn) {
+            const ClefType ct = clefOf(pn);
+            return ct != ClefType::INVALID && ClefInfo::sign(ct)[0] == 'G';
+            };
+      // A4 runs end at a section break (the end ticks of measures carrying one)
+      std::set<int> sectionEnds;
+      for (MeasureBase* mb = _score->first(); mb; mb = mb->next())
+            if (mb->sectionBreak())
+                  sectionEnds.insert(mb->endTick().ticks());
 
       // A3 / A4 chord symbols: a chord symbol anywhere in the part, or a staff text on a left-hand staff that reads as
       // one (chordSymbolText). One stays in force until the next, or until the left hand stops sounding.
@@ -3926,6 +3948,56 @@ void Pass::checkAccordion(Part* part, const QString& staffName)
       int lastSymbolSet = 0;                    // A4: the chord-button notes first written under the last chord symbol
       int symbolUsed = -1;                      // that symbol's tick
       int lhUntil = -1, silenceFrom = -1;       // the end of the left hand's sounding so far; the start of its last silence
+      int barSilenceFrom = -1;                  // the start of its last silence of a whole bar or longer
+      // A4 is reported once per passage (a run): one row from the run's first moment to its last, its notes the first
+      // moment's, every note of the run marked. A run ends at a left-hand silence of a whole bar or longer (shorter
+      // rests are the off-beat gaps of an oom-pah), a chord symbol or a section break
+      struct NotationRun {
+            int count { 0 }, first { 0 }, last { 0 }, track { 0 }, grace { -1 };
+            QString names;
+            QString reason;
+            };
+      NotationRun chordRun, octaveRun;
+      chordRun.reason = "notes above the D line of a Stradella bass staff are chord buttons and need a chord symbol "
+                        "(M, m, 7, d); a single bass note goes on or below the D line (Blatter p. 297, Ex. 6.36-6.37)";
+      octaveRun.reason = "one bass note written in two octaves: a bass button sounds its note in several octaves at once, the "
+                         "octave is the bass shift's, not the player's (Sevsay p. 136; Blatter p. 296); a notation row "
+                         "(derived: no source calls it an error)";
+      auto addToRun = [&](NotationRun& run, const PartMoment& m, const std::vector<const PartNote*>& on, const char* kind) {
+            if (on.empty())
+                  return;
+            std::vector<const PartNote*> sorted = on;
+            std::stable_sort(sorted.begin(), sorted.end(), [](const PartNote* a, const PartNote* b) { return a->note->ppitch() < b->note->ppitch(); });
+            QStringList names;
+            for (const PartNote* n : sorted) {
+                  const QString nm = tpcName(n->note->tpc1(), n->note->ppitch());
+                  if (!names.contains(nm))
+                        names << nm;
+                  warnNote(n->note, kind);
+                  }
+            if (!run.count) {
+                  run.first = m.tick;
+                  run.track = on.front()->chord->track();
+                  run.grace = on.front()->grace;
+                  run.names = names.join(" + ");
+                  }
+            run.last = m.tick;
+            ++run.count;
+            };
+      auto flushRun = [&](NotationRun& run) {
+            if (!run.count)
+                  return;
+            const int bars = barOf(run.last) - barOf(run.first) + 1;
+            QString reason = run.reason;
+            if (run.count > 1)
+                  reason += QString(" (%1 times in %2 bar%3 from bar %4)").arg(run.count).arg(bars).arg(bars == 1 ? "" : "s")
+                                  .arg(barOf(run.first));
+            addRow(run.first, run.last, run.track, staffName, "accordionNotation", "risky", reason,
+                   run.names + (run.count > 1 ? QString(" ") + QChar(0x2026) : QString()));
+            _res.rows.back().grace = run.grace;
+            countLast();
+            run.count = 0;
+            };
       for (const PartMoment& m : moments) {
             const bool freeBass = freeBassAt(bass, m.tick);
             std::vector<const PartNote*> rh, lh, rhRed, rhWarn, lhWarn;
@@ -3933,8 +4005,9 @@ void Pass::checkAccordion(Part* part, const QString& staffName)
                   if (!pn.attack)
                         continue;
                   if (pn.hand == 0) {
-                        // A1 (grace notes too) on the key: pitch() leaves ottava lines out (the accordion does not transpose)
-                        const int key = pn.note->pitch();
+                        // A1 (grace notes too) on the key: pitch() leaves ottava lines out (the accordion does not transpose),
+                        // and an octave clef's sign is taken off like an ottava line (both change the sound, not the key)
+                        const int key = pn.note->pitch() - writtenShift(pn);
                         if (key < ACCORDION_RH_LO || key > ACCORDION_RH_HI)
                               rhRed.push_back(&pn);
                         else if (key < ACCORDION_RH_CONCERT_LO || key > ACCORDION_RH_CONCERT_HI)
@@ -3943,7 +4016,7 @@ void Pass::checkAccordion(Part* part, const QString& staffName)
                               rh.push_back(&pn);
                         }
                   else {
-                        const int p = pn.note->ppitch();
+                        const int p = pn.note->ppitch();     // A6 on the sound: ottava lines and octave clefs count
                         if (freeBass && (p < ACCORDION_FREE_LO || p > ACCORDION_FREE_HI))
                               lhWarn.push_back(&pn);          // A6, on the sound
                         if (m.sub == 0)
@@ -3980,25 +4053,41 @@ void Pass::checkAccordion(Part* part, const QString& staffName)
                                           "adjacent keys (derived: five fingers)").arg(int(pitches.size())));
                   }
 
-            // the left hand's silences, for a chord symbol's reach
+            // the left hand's silences, for a chord symbol's reach; one of a whole bar or longer ends an A4 run
             if (m.sub == 0 && !lh.empty()) {
-                  if (m.tick > lhUntil)
+                  if (m.tick > lhUntil) {
                         silenceFrom = lhUntil;
+                        const Measure* sm = _score->tick2measure(Fraction::fromTicks(std::max(lhUntil, 0)));
+                        if (sm && m.tick - lhUntil >= sm->ticks().ticks())
+                              barSilenceFrom = lhUntil;
+                        }
                   for (const PartNote* pn : lh)
                         lhUntil = std::max(lhUntil, pn->end);
                   }
+            if (freeBass) {
+                  flushRun(chordRun);
+                  flushRun(octaveRun);
+                  }
             if (freeBass || lh.empty() || m.sub != 0)
                   continue;
-            // A3, A4: the Stradella bass, as written on the left-hand staff (Blatter p. 297)
+            // A3, A4: the Stradella bass, as written on the left-hand staff (Blatter p. 297); notes shown in a G clef
+            // are not read as one (F4)
             std::vector<const PartNote*> chordNotes, bassNotes;
             int chordSet = 0;
             for (const PartNote* pn : lh) {
-                  if (absStep(pn->note->tpc(), pn->note->epitch()) > dStep) {
+                  if (trebleClef(*pn))
+                        continue;
+                  if (absStep(pn->note->tpc(), pn->note->epitch() - writtenShift(*pn)) > dStep) {
                         chordNotes.push_back(pn);
                         chordSet |= 1 << (pn->note->epitch() % 12);
                         }
                   else
                         bassNotes.push_back(pn);
+                  }
+            if (chordNotes.empty() && bassNotes.empty()) {
+                  flushRun(chordRun);           // the whole left hand in a G clef here: a run ends
+                  flushRun(octaveRun);
+                  continue;
                   }
             // the chord symbol in force: the last one at or before this moment, with no left-hand silence after it
             int symTick = -1;
@@ -4006,6 +4095,12 @@ void Pass::checkAccordion(Part* part, const QString& staffName)
             if (after != symbols.begin())
                   symTick = *std::prev(after);
             const bool symbol = symTick >= 0 && silenceFrom <= symTick;
+            // an A4 run ends at a left-hand silence of a bar or more, a chord symbol or a section break after its last moment
+            for (NotationRun* run : { &chordRun, &octaveRun })
+                  if (run->count && (barSilenceFrom > run->last
+                                     || symbols.upper_bound(run->last) != symbols.upper_bound(m.tick)
+                                     || sectionEnds.upper_bound(run->last) != sectionEnds.upper_bound(m.tick)))
+                        flushRun(*run);
             if (!chordNotes.empty()) {
                   if (symbol) {
                         if (symTick != symbolUsed) {
@@ -4015,16 +4110,14 @@ void Pass::checkAccordion(Part* part, const QString& staffName)
                         }
                   else if (chordSet != lastSymbolSet) {
                         // a repeated note alone repeats the last chord (Blatter p. 297, Ex. 6.37); anything else needs a symbol
-                        momentRow(m, chordNotes, staffName, "accordionNotation", false,
-                                  "notes above the D line of a Stradella bass staff are chord buttons and need a chord symbol "
-                                  "(M, m, 7, d); a single bass note goes on or below the D line (Blatter p. 297, Ex. 6.36-6.37)");
+                        addToRun(chordRun, m, chordNotes, "accordionNotation");
                         int pcs = 0;
                         for (int b = chordSet; b; b &= b - 1)
                               ++pcs;
                         if (pcs >= ACCORDION_CHORD_MIN_PCS && stradellaChord(chordSet) == StradellaChord::NONE)
                               momentRow(m, chordNotes, staffName, "accordionChord", false,
-                                        pcSetNames(chordNotes) + " is no single chord button (major or minor triad, dominant 7th "
-                                        "with or without the fifth, diminished 7th): the player must combine buttons "
+                                        pcSetNames(chordNotes) + " is no single chord button (no subset of a major or minor "
+                                        "triad, dominant 7th or diminished 7th): the player must combine buttons "
                                         "(Blatter pp. 296-297; Sevsay p. 136)");
                         }
                   }
@@ -4036,11 +4129,10 @@ void Pass::checkAccordion(Part* part, const QString& staffName)
                               doubled.push_back(a);
                               break;
                               }
-            momentRow(m, doubled, staffName, "accordionNotation", false,
-                      "one bass note written in two octaves: a bass button sounds its note in several octaves at once, the "
-                      "octave is the bass shift's, not the player's (Sevsay p. 136; Blatter p. 296); a notation row "
-                      "(derived: no source calls it an error)");
+            addToRun(octaveRun, m, doubled, "accordionNotation");
             }
+      flushRun(chordRun);
+      flushRun(octaveRun);
       checkBellows(part, staffName, moments, bass, dStep);
       }
 

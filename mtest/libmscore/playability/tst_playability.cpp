@@ -2685,21 +2685,20 @@ void TestPlayability::accordion()
             "4 | Accordion | accordionRange | impossible | Eb2", "4 | Accordion | accordionRange | impossible | F7",
             "39 | Accordion | accordionRange | impossible | Eb2",
             "40 | Accordion | accordionRange | impossible | F7",
+            // bar 44 under a G8va clef: the clef's octave is taken off like an ottava line (key F6 clean, key C7 dark
+            // yellow; the row names the sound)
+            "44 | Accordion | accordionRange | risky | C8",
             // A2, never red: a major 10th clean (bar 5), 17 semitones dark yellow, two notes two octaves apart dark yellow;
             // the clusters of bars 37-38 clean
             "6 | Accordion | accordionSpan | risky | C4 + F5",
             "7 | Accordion | accordionSpan | risky | C4 + C6",
             // A7: five notes clean, six (no cluster) dark yellow
             "8 | Accordion | accordionNotes | risky | C4 + D4 + E4 + G4 + A4 + C5",
-            // A4 without symbols; A3 quiet on major, minor, 7th without its fifth, dim7
-            "9 | Accordion | accordionNotation | notation | E3 + G#3 + B3",
-            "9 | Accordion | accordionNotation | notation | A3 + C4 + E4",
-            "9 | Accordion | accordionNotation | notation | G3 + B3 + F4",
-            "9 | Accordion | accordionNotation | notation | F3 + Ab3 + B3 + D4",
-            // A3: a major 7th is no button; two notes (E3 + F3) get A4 only
-            "10 | Accordion | accordionNotation | notation | F3 + A3 + C4 + E4",
+            // A4 without symbols, one row for the run of bars 9-10 (no left-hand rest until bar 11's symbol);
+            // A3 quiet on major, minor, 7th without its fifth, dim7
+            "9 | Accordion | accordionNotation | notation | E3 + G#3 + B3" + dots,
+            // A3: a major 7th is no button; two notes (E3 + F3) get A4 only (inside the run)
             "10 | Accordion | accordionChord | risky | F3 + A3 + C4 + E4",
-            "10 | Accordion | accordionNotation | notation | E3 + F3",
             // A4: bar 11's symbol stays in force; D2 + D3 in two octaves; G3 alone after a left-hand silence;
             // bar 36's G3 B3 D4 under 8vb (written above the D line; the row names the sound); Eb3 in the third space
             // (bar 40's D#3 on the line is a bass note); bars 31-33 and 43 clean (symbols in force, staff text "m")
@@ -2707,6 +2706,22 @@ void TestPlayability::accordion()
             "15 | Accordion | accordionNotation | notation | G3",
             "36 | Accordion | accordionNotation | notation | G2 + B2 + D3",
             "40 | Accordion | accordionNotation | notation | Eb3",
+            // bar 46's G2 B2 D3 under an F8vb clef: written G3 B3 D4, above the D line
+            "46 | Accordion | accordionNotation | notation | G2 + B2 + D3",
+            // bar 48: one A4 run; A3 quiet on a diminished triad (part of a dim7) and G-D-F (part of G7), dark yellow
+            // on Dm7 and on B C E
+            "48 | Accordion | accordionNotation | notation | E3 + G3 + Bb3" + dots,
+            "48 | Accordion | accordionChord | risky | F3 + A3 + C4 + D4",
+            "48 | Accordion | accordionChord | risky | B3 + C4 + E4",
+            // A4 runs: bars 50-52 one row (its quarter rests do not end it, a whole-bar rest does); a section break
+            // after bar 54 splits 54-55; bar 57's symbol ends a run of one chord; bar 58 a new run (the symbol before
+            // it); bars 60-61 one octave row; bar 63 in a G clef clean
+            "50 | Accordion | accordionNotation | notation | F3 + A3 + C4" + dots,
+            "54 | Accordion | accordionNotation | notation | F3 + A3 + C4" + dots,
+            "55 | Accordion | accordionNotation | notation | F3 + A3 + C4" + dots,
+            "57 | Accordion | accordionNotation | notation | F3 + A3 + C4",
+            "58 | Accordion | accordionNotation | notation | F3 + A3 + C4",
+            "60 | Accordion | accordionNotation | notation | D2 + D3" + dots,
             // A5: 8 s held (tied); 6 s by the tempo map; exactly 4 s, breaks, mf, re-struck chords, staccato: clean
             "13 | Accordion | accordionBellows | risky | E3 + C4 + E4 + G4" + dots,
             "28 | Accordion | accordionBellows | risky | E3 + C4 + E4 + G4" + dots,
@@ -2715,6 +2730,7 @@ void TestPlayability::accordion()
             "2 | Free-Bass Accordion | accordionFreeBass | risky | Eb1",
             "4 | Free-Bass Accordion | accordionFreeBass | risky | D6",
             "6 | Free-Bass Accordion | accordionFreeBass | risky | F0",
+            "8 | Free-Bass Accordion | accordionFreeBass | risky | F0",          // under an F8vb clef: the sound
             "4 | Accordion II | accordionFreeBass | risky | Eb1",
             "7 | Accordion II | accordionNotation | notation | F3 + A3 + C4 + E4",
             "7 | Accordion II | accordionChord | risky | F3 + A3 + C4 + E4",
@@ -2731,6 +2747,13 @@ void TestPlayability::accordion()
             if (row.kind == "accordionRange" && row.bar == 4)
                   QCOMPARE(row.reason, QString("outside every accordion's right-hand range, E2-E7 (piano accordion F3-A6 and E3-C7, "
                                                "button accordion A3-E7 and E2-C#7, Sevsay p. 136)"));
+            if (row.kind == "accordionNotation" && row.bar == 50) {
+                  QVERIFY2(row.reason.endsWith("(Blatter p. 297, Ex. 6.36-6.37) (6 times in 3 bars from bar 50)"),
+                           qPrintable(row.reason));
+                  QCOMPARE(row.tickEnd.ticks(), 51 * 1920 + 1440);       // its last chord, bar 52 beat 4
+                  }
+            if (row.kind == "accordionNotation" && row.bar == 57)
+                  QVERIFY2(row.reason.endsWith("(Blatter p. 297, Ex. 6.36-6.37)"), qPrintable(row.reason));
             if (row.kind == "accordionBellows")
                   QCOMPARE(row.reason, QString("full chords in both hands at f or louder for %1 s, held without a break or a "
                                                "re-attack of every note: one bellows stroke lasts about 4 s at full loudness with "
@@ -2798,6 +2821,14 @@ void TestPlayability::accordion()
       QCOMPARE(int(stradellaChord(mask({ 2, 6, 9, 0 }))), int(StradellaChord::DOMINANT7));  // D7
       QCOMPARE(int(stradellaChord(mask({ 2, 6, 0 }))), int(StradellaChord::DOMINANT7));     // D7 without A
       QCOMPARE(int(stradellaChord(mask({ 11, 2, 5, 8 }))), int(StradellaChord::DIMINISHED7));
+      // subsets of one button's notes (3+ pitch classes): a diminished triad (part of a dim7), root + fifth + 7th
+      QCOMPARE(int(stradellaChord(mask({ 1, 4, 7 }))), int(StradellaChord::DIMINISHED7));   // C# E G (rootless A7)
+      QCOMPARE(int(stradellaChord(mask({ 0, 7, 10 }))), int(StradellaChord::DOMINANT7));    // C G Bb
+      QCOMPARE(int(stradellaChord(mask({ 0, 4, 7, 11 }))), int(StradellaChord::NONE));      // C major 7th
+      QCOMPARE(int(stradellaChord(mask({ 0, 4, 11 }))), int(StradellaChord::NONE));         // C E B
+      QCOMPARE(int(stradellaChord(mask({ 9, 0, 4, 7 }))), int(StradellaChord::NONE));       // A minor 7th
+      QCOMPARE(int(stradellaChord(mask({ 0, 2, 4 }))), int(StradellaChord::NONE));          // C D E
+      QCOMPARE(int(stradellaChord(mask({ 0, 4 }))), int(StradellaChord::NONE));             // two notes: not one
       QCOMPARE(int(stradellaChord(mask({ 0, 4, 7, 11 }))), int(StradellaChord::NONE));      // Cmaj7
       QCOMPARE(int(stradellaChord(mask({ 0, 4, 8 }))), int(StradellaChord::NONE));          // augmented
       QCOMPARE(int(stradellaChord(mask({ 0, 7 }))), int(StradellaChord::NONE));             // a bare fifth

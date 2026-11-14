@@ -49,10 +49,37 @@ accordion-tests.mscx
     42  RH C4 E4 G4 shown on the lower staff (staffMove) with LH C2
                                              clean (the right hand's chord stays the right hand's)
     43  LH symbol "C" + E3 G3 C4 | C4 alone  clean (the symbol still in force)
+    44  RH half rest, G8va clef, F7 | C8 (sounding; written F6, C7)
+                                             clean | W Y A1 (the octave clef is taken off like an ottava line: key F6, C7)
+    45  RH G clef again at the bar's end
+    46  LH half rest, F8vb clef, G2 B2 D3 (written G3 B3 D4)
+                                             N A4 (written above the D line; the row names the sound)
+    47  LH F clef again at the bar's end
+    48  LH E3 G3 Bb3 | G3 D4 F4 | F3 A3 C4 D4 | B3 C4 E4 (quarters, no symbols)
+                                             N A4 once (a run of 4 chords in 1 bar); no A3 on the diminished triad
+                                             (part of a dim7 button) or G-D-F (part of G7), Y A3 on F A C D (Dm7) and
+                                             on B C E (no button holds a semitone)
+    50-52  LH oom-pah F2 | F3 A3 C4 | rest | F3 A3 C4, three bars, no symbols, then a whole-bar rest
+           (F major: not bar 43's C major, whose repeat alone would repeat that chord)
+                                             N A4 once: 6 chords in 3 bars from bar 50 (a quarter rest does not end a run)
+    54-55  the same oom-pah, a section break at the end of bar 54
+                                             N A4 at 54 and at 55 (a section break ends a run)
+    57  LH F2 | F3 A3 C4 | symbol "G" + G2 | G3 B3 D4
+                                             N A4 on the first chord alone (the symbol ends the run; no dots)
+    58  LH quarter rest | F3 A3 C4 | half rest
+                                             N A4 (the symbol ended at the silence: a new run)
+    60-61  LH D2 + D3 twice (whole notes)    N A4 once (one bass note in two octaves, a run of 2)
+    62  LH G clef at the bar's end
+    63  LH E4 G4 C5 | A4 | F4 A4 C5 E5 in the G clef
+                                             clean (a left hand in a G clef is not read as a Stradella bass)
+    64  LH F clef again at the bar's end
   Free-Bass Accordion (keyboard.accordion; free bass by its name)
      1  LH E1 | 2 Eb1 | 3 C#6 | 4 D6         clean, W Y A6, clean, W Y A6
      5  LH F3 A3 C4 E4 (no symbol)           clean (no Stradella checks on a free bass)
      6  LH F1 under 8vb                      W Y A6 (A6 reads the sound, F0)
+     8  LH half rest, F8vb clef, F0 (written F1)
+                                             W Y A6 (an octave clef counts too: the sound)
+     9  F clef again at the bar's end
   Accordion II (keyboard.accordion; standard until a staff text "M III" at bar 3, "converter off" at bar 6)
      1  LH Eb1                               clean (standard bass: a bass note)
      4  LH Eb1                               W Y A6 (free bass from bar 3)
@@ -81,7 +108,7 @@ TPC = {'F': 13, 'C': 14, 'G': 15, 'D': 16, 'A': 17, 'E': 18, 'B': 19}
 FULL = '<Rest><durationType>measure</durationType><duration>4/4</duration></Rest>'
 HALF_REST = '<Rest><durationType>half</durationType></Rest>'
 QUARTER_REST = '<Rest><durationType>quarter</durationType></Rest>'
-BARS = 43
+BARS = 64
 TIE_NEXT = '<Spanner type="Tie"><Tie></Tie><next><location><measures>1</measures></location></next></Spanner>'
 TIE_PREV = '<Spanner type="Tie"><prev><location><measures>-1</measures></location></prev></Spanner>'
 
@@ -121,6 +148,13 @@ def sym(root):
     return '<Harmony><root>%d</root></Harmony>' % TPC[root]
 
 
+def clef(c):
+    return '<Clef><concertClefType>%s</concertClefType><transposingClefType>%s</transposingClefType></Clef>' % (c, c)
+
+
+SECTION_BREAK = '<LayoutBreak><subtype>section</subtype><startWithMeasureOne>0</startWithMeasureOne></LayoutBreak>'
+
+
 def text(t):
     return '<StaffText><text>%s</text></StaffText>' % t
 
@@ -150,12 +184,13 @@ def head(c, tempo_mark):
             + dyn('mf'))
 
 
-def staff(bars, c, tempo_mark):
-    """bars: {bar number: voice xml}; the rest are whole-bar rests"""
+def staff(bars, c, tempo_mark, measure_extra=None):
+    """bars: {bar number: voice xml}; the rest are whole-bar rests; measure_extra: {bar number: measure-level xml}"""
     out = []
     for b in range(1, BARS + 1):
         v = bars.get(b, FULL)
-        out.append('<Measure><voice>%s%s</voice></Measure>' % (head(c, tempo_mark) if b == 1 else '', v))
+        x = (measure_extra or {}).get(b, '')
+        out.append('<Measure><voice>%s%s</voice>%s</Measure>' % (head(c, tempo_mark) if b == 1 else '', v, x))
     return out
 
 
@@ -212,6 +247,8 @@ std_rh = {
     40: w('F7', TIE_NEXT),
     41: w('F7', TIE_PREV),
     42: w(FULL_RH).replace('<Chord>', '<Chord>' + CROSS_DOWN, 1),
+    44: HALF_REST + clef('G8va') + q('F7') + q('C8'),
+    45: FULL + clef('G'),
 }
 std_lh = {
     9: q('E3 G#3 B3') + q('A3 C4 E4') + q('G3 B3 F4') + q('F3 Ab3 B3 D4'),
@@ -240,10 +277,24 @@ std_lh = {
     40: h('Eb3') + h('D#3'),
     42: w('C2'),
     43: sym('C') + h('E3 G3 C4') + h('C4'),
+    46: HALF_REST + clef('F8vb') + h('G2 B2 D3'),
+    47: FULL + clef('F'),
+    48: q('E3 G3 Bb3') + q('G3 D4 F4') + q('F3 A3 C4 D4') + q('B3 C4 E4'),
+    57: q('F2') + q('F3 A3 C4') + sym('G') + q('G2') + q('G3 B3 D4'),
+    58: QUARTER_REST + q('F3 A3 C4') + HALF_REST,
+    60: w('D2 D3'),
+    61: w('D2 D3'),
+    62: FULL + clef('G'),
+    63: q('E4 G4 C5') + q('A4') + h('F4 A4 C5 E5'),
+    64: FULL + clef('F'),
 }
+OOMPAH = q('F2') + q('F3 A3 C4') + QUARTER_REST + q('F3 A3 C4')
+for b in (50, 51, 52, 54, 55):
+    std_lh[b] = OOMPAH
 # bar 32's chord symbol on the upper staff (the right hand's rests there)
 std_rh[32] = sym('G') + FULL
-free_lh = {1: w('E1'), 2: w('Eb1'), 3: w('C#6'), 4: w('D6'), 5: w(MAJ7), 6: ottava('8vb', w('F1')), 7: OTTAVA_END + FULL}
+free_lh = {1: w('E1'), 2: w('Eb1'), 3: w('C#6'), 4: w('D6'), 5: w(MAJ7), 6: ottava('8vb', w('F1')), 7: OTTAVA_END + FULL,
+           8: HALF_REST + clef('F8vb') + h('F0'), 9: FULL + clef('F')}
 conv_lh = {1: w('Eb1'), 3: text('M III') + FULL, 4: w('Eb1'), 5: w(MAJ7), 6: text('converter off') + FULL, 7: w(MAJ7)}
 three = {1: w(MAJ7)}
 three_lh = {2: w(MAJ7)}
@@ -257,7 +308,7 @@ write('accordion-tests.mscx',
        part('Accordion IV', 'keyboard.accordion', 21, ('F',)),
        part('Free-Bass Accordion 2', 'keyboard.accordion', 21, ('F',)),
        part('Bandoneon', 'keyboard.bandoneon', 23)],
-      [staff(std_rh, 'G', True), staff(std_lh, 'F', False),
+      [staff(std_rh, 'G', True, {54: SECTION_BREAK}), staff(std_lh, 'F', False),
        staff({}, 'G', False), staff(free_lh, 'F', False),
        staff({}, 'G', False), staff(conv_lh, 'F', False),
        staff({}, 'G', False), staff(three, 'G', False), staff(three_lh, 'F', False),
