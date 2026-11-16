@@ -243,9 +243,10 @@ changes one tick after their chord; the technique comes from the notation.
     (`attackOnset`); `[slurs] transitionsEarly` 1 (by the modelled arrival; capped so the note before keeps keepMs / 15 ms).
   - `[slurs] plainPerformance` 1 (the owner, "C" by ear): every bowed note of such a part on its Performance legato
     (`choosePlain`), velocity 64, at its written start, the patch's events `<Instrument plainShift>` early as a track delay
-    (`TrackDelays::Delays::plain`); `plainJoins` 0 everywhere; `plainAuto` 1 (smooth after a rest, bowed on each new bow,
-    fingered inside a slur, spiccato for staccatos; 2 = new bows early by `bowedEarly`; 3 / 4 = re-attack variants for the
-    owner's A/B only); `plainTiming` 0 (rejected by ear); `plainAccents` 2 (accented attack at real players' +5.0 dB,
+    (`TrackDelays::Delays::plain`); `plainJoins` 0 everywhere; `plainAuto` 3 (since 2026-11-16, the owner: "fix it in rec",
+    after re-test 3 measured 1's repeated K. 550 notes unattacked: 1 = smooth after a rest, bowed on each new bow, fingered
+    inside a slur, spiccato for staccatos; 3 = 1 plus a key struck again re-attacked, 106 with a 54 ms gap, inside a slur too;
+    2 = new bows early by `bowedEarly`, 4 = 3 plus short new bows re-attacked: the owner's A/B only); `plainTiming` 0 (rejected by ear); `plainAccents` 2 (accented attack at real players' +5.0 dB,
     `PLAIN_ACCENT_DB`).
   - `speedFromWritten` 0 and `fixedTransitions` 0 in both presets (CC119 from the written spacing; Kontakt random sources at
     intensity 0). `microtoneBends` 3 and `runBends` 1 (the owner: "the fix is obv better"; `microtoneSpelling`, `midEarly`,
