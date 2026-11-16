@@ -279,6 +279,16 @@ static const std::vector<Definition> DEFINITIONS = {
         "scales played at the markings as in orchestral music, Clark & Luce 1965, as sound power with TU Berlin's directivity, "
         "+ section size; agrees per family with the Spheres dataset's sections and Skaalevik 2019's orchestra measurements); "
         "1: TU Berlin's single notes at Meyer's mp (sectionLevel); 0: every section at the same level", true },
+      // (the owner, 2026-11-16, re-test 3 of K. 550 i: "Yes, per-score setting (Recommended)" to "A score can say full /
+      // chamber strings (the composer's choice); default stays full". The composer's choice, so no preset sets it and it
+      // plays in every preset (as phrase marks do); contextlevel.h › String section size: 10 log10(n_chamber / n_library)
+      // on the string sections' gain stage, an assumption, no measured data)
+      { "levels/stringSections", 0, 0, 1, "",
+        "how many players the five string sections have (the composer's choice, set per score): 0 full, the sound library's "
+        "own sections (SSO 16 / 14 / 12 / 10 / 8, map players); 1 chamber, one chamber orchestra's (the Spheres K. 550 "
+        "recording: 6 violins, split 3 / 3 here, 4 violas, 3 celli, 2 basses): every patch of a section 10 log10(chamber / "
+        "full players) dB softer by its gain stage (incoherent power sum, an assumption: Violins 1 -7.3, Violins 2 -6.7, "
+        "Violas -4.8, Celli -5.2, Basses -6.0 dB on SSO). Library parts only (map strings / players); MS3 and MS4 unchanged", true },
       // (the owner, 2026-10-12, stage A of the dynamics plan: each note as loud as a real player at its written dynamic,
       // the player's full range; rule D: TU Berlin's pp / ff are ppp / fff, 7 equal dB steps, relative to mp; 2026-10-13,
       // heard on the ladder: "this sounds great": on in Recommended and by default, off in Library default; contextlevel.h ›
@@ -587,6 +597,9 @@ static const std::vector<Display> DISPLAY = {
       { "levels/sectionBalance", QT_TRANSLATE_NOOP("playbackSettings", "Loudness"), QT_TRANSLATE_NOOP("playbackSettings", "Section balance"),
         QT_TRANSLATE_NOOP("playbackSettings", "The sections play at the balance of a real orchestra"),
         { QT_TRANSLATE_NOOP("playbackSettings", "Off"), QT_TRANSLATE_NOOP("playbackSettings", "Single notes"), QT_TRANSLATE_NOOP("playbackSettings", "Orchestral playing") } },
+      { "levels/stringSections", QT_TRANSLATE_NOOP("playbackSettings", "Loudness"), QT_TRANSLATE_NOOP("playbackSettings", "String sections"),
+        QT_TRANSLATE_NOOP("playbackSettings", "How many players the string sections have: the sound library's full sections, or a chamber orchestra's"),
+        { QT_TRANSLATE_NOOP("playbackSettings", "Full"), QT_TRANSLATE_NOOP("playbackSettings", "Chamber") } },
       { "levels/realRange", QT_TRANSLATE_NOOP("playbackSettings", "Loudness"), QT_TRANSLATE_NOOP("playbackSettings", "Dynamic range"),
         QT_TRANSLATE_NOOP("playbackSettings", "Each dynamic plays as loud as a real player plays it"),
         { QT_TRANSLATE_NOOP("playbackSettings", "Sound library"), QT_TRANSLATE_NOOP("playbackSettings", "Single notes"), QT_TRANSLATE_NOOP("playbackSettings", "Orchestral playing") } },
@@ -879,7 +892,7 @@ QString iniTemplate()
 //    lifted by the next transition's step, branch bowed-join); levels/attackLevels (0 in both on 2026-10-22, branch attack-levels; 2 in Recommended and by default, 0 in Library
 //    default, since 2026-10-23: the owner heard it, "B better"); shorts/staccatoLength (0 in both on 2026-10-24, branch
 //    staccato-length; 1 in Recommended and by default, 0 in Library default, since the same day: the owner heard the clips, "B");
-//    levels/leading (1 in Recommended and by default, 0 in Library default, since 2026-11-06: the owner, the simple 3.5 dB now); levels/evenKeys (1 in Recommended and by default, 0 in Library default, since 2026-10-28: the owner approved the approach); levels/lowCut (1 in Recommended and by default, 0 in Library default, since 2026-10-30: the owner, the strings' new-bow kick; 2, following, since 2026-10-31: the owner heard it, "yes, much better now"). The other settings are not in the table because: legato/keepMs acts
+//    levels/leading (1 in Recommended and by default, 0 in Library default, since 2026-11-06: the owner, the simple 3.5 dB now); levels/stringSections (in neither preset since 2026-11-16: the composer's choice, per score, played in both); levels/evenKeys (1 in Recommended and by default, 0 in Library default, since 2026-10-28: the owner approved the approach); levels/lowCut (1 in Recommended and by default, 0 in Library default, since 2026-10-30: the owner, the strings' new-bow kick; 2, following, since 2026-10-31: the owner heard it, "yes, much better now"). The other settings are not in the table because: legato/keepMs acts
 //    only with early starts (so it follows heldNotes/early); the shorts' lengths are MuseScore 4's note model (not a
 //    timing adjustment of this fork); tuning and hosting are mechanics (how microtones and plug-ins work), not a
 //    choice of sound.

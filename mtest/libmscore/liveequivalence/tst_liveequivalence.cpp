@@ -191,6 +191,7 @@ class TestLiveEquivalence : public QObject, public MTest
       void liveContextLevel();
       void liveEvenLevels();
       void liveSectionBalance();
+      void liveStringSections();
       void liveRealRange_data();
       void liveRealRange();
       void liveMicCompensation();
@@ -5031,6 +5032,110 @@ void TestLiveEquivalence::liveSectionBalance()
       for (const auto& e : expected)
             QVERIFY2(std::fabs(gains[e.first] - std::pow(10.0, e.second / 20)) < 1e-9,
                      qPrintable(QString("%1: %2 dB, expected %3").arg(e.first).arg(20 * std::log10(gains[e.first])).arg(e.second)));
+      delete score;
+      }
+
+//---------------------------------------------------------
+//   liveStringSections
+//    [levels] stringSections (contextlevel.h › String section size) reaches Live and MIDI out: Chamber's 10 log10(chamber /
+//    players) dB is the patches' gain stage, so the route set's and the plain set's Kontakt tracks carry it as MuseScore's
+//    Utility (the fader the Mixer's) and MIDI out as CC7; Live's clips are the same for both (no CC11 or velocity of its
+//    own). Library default otherwise (no other level setting); Full: no Utility, no CC7
+//---------------------------------------------------------
+
+void TestLiveEquivalence::liveStringSections()
+      {
+      auto lib = loadMap(
+         "<SoundLibrary name='t'><Switch type='cc' number='32'/><Dynamics cc='1'/>"
+         "<Instrument name='Violin' ids='violin' strings='violins1' players='16'><Articulation name='Long' value='1' techniques='long legato'/></Instrument>"
+         "<Instrument name='Viola' ids='viola' strings='violas' players='12'><Articulation name='Long' value='1' techniques='long legato'/></Instrument>"
+         "</SoundLibrary>");
+      QVERIFY(lib);
+      SoundLib::setCurrent(lib);
+      SoundLib::setOutput(SoundLib::Output::PLUGIN);
+      struct Reset { ~Reset() { SoundLib::setCurrent(nullptr); SoundLib::setOutput(SoundLib::Output::PLUGIN); Playback::setIniValuesForTest({}); } } reset;
+      MasterScore* score = readScore(DIR + "section-balance.musicxml");
+      QVERIFY(score);
+      score->rebuildMidiMapping();
+      const std::map<QString, double> sized { { "Violin", 10 * std::log10(3.0 / 16) }, { "Viola", 10 * std::log10(4.0 / 12) } };
+      std::map<bool, QStringList> clipsOf;
+      auto run = [&](bool chamber) {
+            Playback::setIniValuesForTest({ { "levels/calibrated", "0" }, { "levels/context", "0" }, { "levels/sectionBalance", "0" },
+                                            { "levels/realRange", "0" }, { "levels/micCompensation", "0" }, { "levels/evenLevels", "0" },
+                                            { "slurs/performance", "0" }, { "levels/stringSections", chamber ? "1" : "0" } });
+            score->setPlaylistDirty();
+            SoundLib::setOutput(SoundLib::Output::PLUGIN);
+            EventMap events;
+            score->renderMidi(&events, false, true, SynthesizerState());
+            // Live's clips: per route the notes as rendered, the carriers (CC11 …) as with Full (the level is the gain stage's)
+            const LiveClips::Timeline tl = LiveClips::timeline(score);
+            int clipNotes = 0, renderedNotes = 0;
+            for (const LiveClips::Track& c : LiveClips::tracks(score, *lib, events, { "MuseScore A" }, tl))
+                  for (const LiveClips::Note& n : c.notes) {
+                        clipNotes += n.pitch < LiveClips::CARRIER_LOW;
+                        clipsOf[chamber] << QString("%1 %2 %3 %4 %5").arg(c.key).arg(n.start).arg(n.pitch).arg(n.velocity).arg(n.length);
+                        }
+            for (const auto& te : events)
+                  renderedNotes += te.second.isExternal() && !te.second.librarySwitch() && te.second.type() == ME_NOTEON && te.second.velo() > 0;
+            QCOMPARE(clipNotes, renderedNotes);
+            // the route set: the fader the Mixer's, MuseScore's Utility the size
+            int checked = 0;
+            for (const LiveSetWriter::Track& t : LiveSetWriter::tracks(score, *lib, { "MuseScore A" })) {
+                  if (!sized.count(t.patch) || t.lane != 0)
+                        continue;
+                  const double mix = LiveSetWriter::mixGain(SoundLib::partMix(t.partRef, false).volume);
+                  const double want = mix * (chamber ? std::pow(10.0, sized.at(t.patch) / 20) : 1.0);
+                  QVERIFY2(std::fabs(t.volume - mix) < 1e-9, qPrintable(t.patch));
+                  QCOMPARE(t.utility, chamber);
+                  QVERIFY2(std::fabs(liveGain(t) - want) < 1e-9, qPrintable(QString("%1: %2, expected %3").arg(t.patch).arg(liveGain(t)).arg(want)));
+                  ++checked;
+                  }
+            QCOMPARE(checked, 2);
+            // the plain set: its Kontakt tracks' gain stage
+            score->setPlaylistDirty();
+            MidiRenderer r(score);
+            r.setForLiveClips(true);
+            SynthesizerState ss;
+            MidiRenderer::Context ctx(ss);
+            EventMap chunked;
+            for (int utick = 0;;) {
+                  const MidiRenderer::Chunk c = r.getChunkAt(utick);
+                  if (!c)
+                        break;
+                  r.renderChunk(c, &chunked, ctx);
+                  utick = c.utick2();
+                  }
+            const PlainLiveSet::Layout l = PlainLiveSet::layout(score, *lib, chunked, tl);
+            int kontakts = 0;
+            for (const PlainLiveSet::Section& sec : l.sections)
+                  for (const PlainLiveSet::PartTracks& p : sec.parts)
+                        for (const PlainLiveSet::Kontakt& k : p.kontakts) {
+                              const double want = chamber ? sized.at(k.patch) : 0.0;
+                              QVERIFY2(std::fabs(k.gainStageDb - want) < 1e-9, qPrintable(QString("%1: %2 dB, expected %3").arg(k.patch).arg(k.gainStageDb).arg(want)));
+                              QVERIFY2(std::fabs(k.gain - std::pow(10.0, want / 20)) < 1e-9, qPrintable(k.patch));
+                              ++kontakts;
+                              }
+            QCOMPARE(kontakts, 2);
+            // MIDI out: CC7 carries it (Full: none)
+            SoundLib::setOutput(SoundLib::Output::MIDI);
+            const std::map<int, int> cc7 = TrackDelays::midiVolumes(score, *lib, false);
+            QCOMPARE(cc7.empty(), !chamber);
+            if (chamber) {
+                  std::map<QString, double> db;
+                  for (const SoundLib::Route& rt : SoundLib::routes(score, *lib, true)) {
+                        auto c = cc7.find(rt.port * 16 + rt.channel);
+                        QVERIFY(c != cc7.end());
+                        db[rt.instrument->name] = 40 * std::log10(c->second / 100.0) - 40 * std::log10(SoundLib::partMix(rt.part, false).volume / 100.0);
+                        }
+                  for (const auto& sz : sized)        // (CC7's step: within 0.2 dB here)
+                        QVERIFY2(std::fabs(db[sz.first] - sz.second) < 0.2, qPrintable(QString("%1: CC7 %2 dB, expected %3").arg(sz.first).arg(db[sz.first]).arg(sz.second)));
+                  }
+            SoundLib::setOutput(SoundLib::Output::PLUGIN);
+            };
+      run(false);
+      run(true);
+      QVERIFY(!clipsOf[false].isEmpty());
+      QCOMPARE(clipsOf[true], clipsOf[false]);
       delete score;
       }
 

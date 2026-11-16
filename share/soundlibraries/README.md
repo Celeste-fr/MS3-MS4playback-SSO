@@ -389,6 +389,13 @@ switch value of each articulation. For example:
     since 2026-10-14) instead of `sectionLevel`; a section without it plays its `sectionLevel`. SSO: the real side from
     Clark & Luce 1965's orchestral scales at mp as sound power (TU Berlin's directivity), against the same SSO levels
     (`tools/soundlibraries/section_balance_cl.py` -> `sso_cl_section_balance.json` -> `gen_spitfire_sso.py`).
+  - `strings` and `players` on an `Instrument` (the main patch; its `with` patches take them): which of the five
+    string sections the patch plays (`violins1`, `violins2`, `violas`, `celli`, `basses`) and how many players its
+    recording has. With playback setting `[levels] stringSections` 1 (Chamber, set per score: the composer's choice)
+    every patch of the section plays 10 log10(chamber players / `players`) dB softer by its gain stage
+    (`libmscore/contextlevel.h` › String section size; the chamber counts 3 / 3 / 4 / 3 / 2 are one real ensemble's,
+    an assumption). SSO: 16 / 14 / 12 / 10 / 8 (Spitfire's product page, `gen_spitfire_sso.py` STRING_SECTIONS); Vial
+    Instrumental's SSO imitations take SSO's (`gen_vial.py`).
   - `leadingLevel` on an `Instrument` (dB, 0-24): how much louder a note of the patch plays while its part's Leading lane
     is On, with `[levels] leading` 1 (libmscore/leadinglane.h); without it the setting `[levels] leadingDb`. No shipped
     map has one yet (pending measurements of several orchestras)

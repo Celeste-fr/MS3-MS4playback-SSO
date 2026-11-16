@@ -1231,6 +1231,19 @@ std::shared_ptr<Library> Library::load(const QString& path, QString* error)
                   li.sectionLevelDb = a.value("sectionLevel").toDouble();
                   li.hasSectionLevel2 = a.hasAttribute("sectionLevel2");
                   li.sectionLevel2Db = a.value("sectionLevel2").toDouble();
+                  // strings="violins1|violins2|violas|celli|basses" players="N" ([levels] stringSections)
+                  if (a.hasAttribute("strings")) {
+                        static const QStringList sections { "violins1", "violins2", "violas", "celli", "basses" };
+                        li.stringSection = sections.indexOf(a.value("strings").toString()) + 1;
+                        if (li.stringSection <= 0)
+                              return fail(QString("%1:%2: bad strings \"%3\"").arg(path).arg(r.lineNumber()).arg(a.value("strings").toString()));
+                        }
+                  if (a.hasAttribute("players")) {
+                        bool ok = false;
+                        li.players = a.value("players").toInt(&ok);
+                        if (!ok || li.players < 1)
+                              return fail(QString("%1:%2: bad players \"%3\"").arg(path).arg(r.lineNumber()).arg(a.value("players").toString()));
+                        }
                   // realSpan="pitch:dB ...", longLevel="cc/pitch:dB ..." ([levels] realRange)
                   for (const QString& t : a.value("realSpan").toString().split(' ', QString::SkipEmptyParts)) {
                         bool ok1 = false, ok2 = false;
@@ -1361,6 +1374,10 @@ std::shared_ptr<Library> Library::load(const QString& path, QString* error)
             if (!li.hasSectionLevel2) {
                   li.hasSectionLevel2 = main->hasSectionLevel2;
                   li.sectionLevel2Db = main->sectionLevel2Db;
+                  }
+            if (!li.stringSection) {
+                  li.stringSection = main->stringSection;
+                  li.players = main->players;
                   }
             if (li.realSpan.empty() && li.longLevel.empty()) {
                   li.realSpan = main->realSpan;

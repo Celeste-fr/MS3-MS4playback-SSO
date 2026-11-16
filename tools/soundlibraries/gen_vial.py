@@ -92,7 +92,8 @@ def level_attrs(inst, sso_attrs, lv):
         return ''
     long = ' '.join(f'{cc}/{p}:{v:g}' for p, per in sorted(((int(p), per) for p, per in e['long'].items()))
                     for cc, v in sorted(((int(c), v) for c, v in per.items())))
-    a = ''.join(f' {k}="{esc(sso_attrs[k])}"' for k in ('realSpan', 'realPlay', 'realSteps') if k in sso_attrs)
+    # (the string sections' strings= / players=, [levels] stringSections: Vial's SSO imitations as SSO's sections)
+    a = ''.join(f' {k}="{esc(sso_attrs[k])}"' for k in ('realSpan', 'realPlay', 'realSteps', 'strings', 'players') if k in sso_attrs)
     return (f' sectionLevel="{e["sectionLevel"]:g}" sectionLevel2="{e["sectionLevel2"]:g}"' + a
             + f' longLevel="{long}"')
 

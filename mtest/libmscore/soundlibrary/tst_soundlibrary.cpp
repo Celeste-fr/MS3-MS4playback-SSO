@@ -199,6 +199,7 @@ class TestSoundLibrary : public QObject, public MTest
       void plainAccents();
       void staccatoLength();
       void levelSectionBalance();
+      void levelStringSections();
       void levelTechniqueBalance();
       void levelMicCompensation();
       void gainStage();
@@ -2074,6 +2075,8 @@ void TestSoundLibrary::playbackPresets()
       QCOMPARE(Playback::detectPreset({ { "slurs/plainAuto", 3 } }), QString("recommended"));
       QCOMPARE(Playback::detectPreset({ { "slurs/plainAuto", 1 } }), QString());
       QCOMPARE(Playback::detectPreset({ { "slurs/plainAuto", 0 } }), QString());
+      // stringSections: in neither preset, so either value leaves the preset as it is
+      QCOMPARE(Playback::detectPreset({ { "levels/stringSections", 1 } }), QString("recommended"));
       // staccatoLength likewise (1 by default since 2026-10-24, Recommended's)
       QCOMPARE(Playback::detectPreset({ { "shorts/staccatoLength", 1 } }), QString("recommended"));
       QCOMPARE(Playback::detectPreset({ { "levels/attackLevels", 1 } }), QString());
@@ -4237,6 +4240,138 @@ void TestSoundLibrary::levelContext()
       Playback::setIniValuesForTest({});
       delete score;
       SoundLib::setCurrent(nullptr);
+      }
+
+//---------------------------------------------------------
+//   levelStringSections
+//    [levels] stringSections (contextlevel.h › String section size; the owner, 2026-11-16): a score's string sections Full
+//    (0, the default: nothing changes) or Chamber (1): every patch of a section with the map's strings / players (the main
+//    patch's; the extras take them) plays 10 log10(chamber / players) dB by its gain stage, on top of the section balance,
+//    with no other level setting too (Library default). Layers: the default 0, the ini's 1, the score's 0 over it, the
+//    score's 1 over the ini's 0; in neither preset. The shipped SSO and Vial maps: the five sections 16 / 14 / 12 / 10 / 8,
+//    nothing else
+//---------------------------------------------------------
+
+void TestSoundLibrary::levelStringSections()
+      {
+      auto lib = loadMap(
+         "<SoundLibrary name='t'><Switch type='cc' number='32'/><Dynamics cc='1'/>"
+         "<Instrument name='Violin' ids='violin' sectionLevel2='-1.5' strings='violins1' players='16'><Articulation name='Long' value='1' techniques='long legato'/></Instrument>"
+         "<Instrument name='Viola' ids='viola' sectionLevel2='2' strings='violas' players='12'><Articulation name='Long' value='1' techniques='long legato'/></Instrument>"
+         "<Instrument name='Violin - Performance' with='Violin'><Switch type='none'/><Articulation name='Legato' value='20' techniques='legato long' modifiers='performance'/></Instrument>"
+         "</SoundLibrary>");
+      QVERIFY(lib);
+      for (const SoundLib::LibInstrument& li : lib->instruments) {
+            QCOMPARE(li.stringSection, li.name.startsWith("Violin") ? 1 : 3);       // (the extra takes the main's)
+            QCOMPARE(li.players, li.name.startsWith("Violin") ? 16 : 12);
+            }
+      QVERIFY(!loadMap("<SoundLibrary name='t'><Instrument name='V' ids='violin' strings='violins3'/></SoundLibrary>"));
+      QVERIFY(!loadMap("<SoundLibrary name='t'><Instrument name='V' ids='violin' strings='violins1' players='0'/></SoundLibrary>"));
+      const double violinDb = 10 * std::log10(3.0 / 16), violaDb = 10 * std::log10(4.0 / 12);
+      QVERIFY(std::fabs(ContextLevel::stringSectionDb(lib->instruments[0], 1) - violinDb) < 1e-12);
+      QVERIFY(std::fabs(violinDb + 7.27) < 0.005 && std::fabs(violaDb + 4.77) < 0.005);
+      QCOMPARE(ContextLevel::stringSectionDb(lib->instruments[0], 0), 0.0);
+      SoundLib::setCurrent(lib);
+      SoundLib::setOutput(SoundLib::Output::PLUGIN);
+      struct Reset { ~Reset() { SoundLib::setCurrent(nullptr); Playback::setIniValuesForTest({}); } } reset;
+      MasterScore* score = readScore(DIR + "section-balance.musicxml");
+      QVERIFY(score);
+      score->rebuildMidiMapping();
+      const Part* violin = score->parts()[0];
+      const Part* viola = score->parts()[1];
+      // each note's level: its route's CC11 in force plus its patch's gain (TrackDelays::patchGain: the gain stage, trim
+      // included)
+      auto levels = [&]() {
+            score->setPlaylistDirty();
+            EventMap events;
+            score->renderMidi(&events, false, true, SynthesizerState());
+            std::map<int, const SoundLib::Route*> byRoute;
+            const std::vector<SoundLib::Route> routes = SoundLib::routes(score, *SoundLib::current());
+            for (const SoundLib::Route& r : routes)
+                  byRoute[r.port * 16 + r.channel] = &r;
+            const std::map<const Part*, TrackDelays::Delays> delays = TrackDelays::read(score);
+            std::map<int, int> cc11;
+            std::map<int, double> out;          // pitch -> dB
+            for (const auto& te : events) {
+                  const NPlayEvent& ev = te.second;
+                  if (!ev.isExternal() || ev.librarySwitch())
+                        continue;
+                  const int route = ev.extPort() * 16 + ev.extChannel();
+                  if (ev.type() == ME_CONTROLLER && ev.controller() == CTRL_EXPRESSION)
+                        cc11[route] = ev.value();
+                  else if (ev.type() == ME_NOTEON && ev.velo() > 0 && byRoute.count(route)) {
+                        const SoundLib::Route* r = byRoute[route];
+                        const double gain = TrackDelays::patchGain(*SoundLib::current(), TrackDelays::of(r->part, delays), r->instrument->name);
+                        out[ev.pitch()] = 20 * std::log10((cc11.count(route) ? cc11[route] : 127) / 127.0) + 20 * std::log10(gain);
+                        }
+                  }
+            return out;
+            };
+      auto shifted = [](const std::map<int, double>& a, const std::map<int, double>& b, int pitch, double db) {
+            return a.count(pitch) && b.count(pitch) && std::fabs(b.at(pitch) - a.at(pitch) - db) < 1e-6;
+            };
+      // Library default (no level setting): Full nothing, no gain stage; Chamber the sizes alone
+      const std::map<QString, QString> libraryDefault { { "levels/calibrated", "0" }, { "levels/context", "0" }, { "levels/sectionBalance", "0" },
+                                                        { "levels/realRange", "0" }, { "levels/micCompensation", "0" }, { "levels/evenLevels", "0" },
+                                                        { "slurs/performance", "0" } };
+      Playback::setIniValuesForTest(libraryDefault);
+      QCOMPARE(Playback::value("levels/stringSections", score), 0.0);       // (the default: Full)
+      QVERIFY(ContextLevel::volumes(score).empty());
+      const std::map<int, double> full = levels();
+      std::map<QString, QString> chamber = libraryDefault;
+      chamber["levels/stringSections"] = "1";
+      Playback::setIniValuesForTest(chamber);
+      std::map<const Part*, ContextLevel::Volumes> v = ContextLevel::volumes(score);
+      QVERIFY(std::fabs(v[violin].patchDb["Violin"] - violinDb) < 1e-9);
+      QVERIFY(std::fabs(v[viola].patchDb["Viola"] - violaDb) < 1e-9);
+      const std::map<int, double> chamberLevels = levels();
+      QCOMPARE(chamberLevels.size(), full.size());
+      QVERIFY2(shifted(full, chamberLevels, 79, violinDb), qPrintable(QString::number(chamberLevels.at(79) - full.at(79))));
+      QVERIFY2(shifted(full, chamberLevels, 57, violaDb), qPrintable(QString::number(chamberLevels.at(57) - full.at(57))));
+      // with the section balance (2): on top of its levels, the same difference
+      std::map<QString, QString> balance = libraryDefault;
+      balance["levels/sectionBalance"] = "2";
+      Playback::setIniValuesForTest(balance);
+      const std::map<int, double> balanced = levels();
+      balance["levels/stringSections"] = "1";
+      Playback::setIniValuesForTest(balance);
+      v = ContextLevel::volumes(score);
+      QVERIFY(std::fabs(v[violin].patchDb["Violin"] - v[violin].shift - (-1.5 + violinDb)) < 1e-9);
+      QVERIFY(std::fabs(v[viola].patchDb["Viola"] - v[viola].shift - (2 + violaDb)) < 1e-9);
+      const std::map<int, double> balancedChamber = levels();
+      QVERIFY(shifted(balanced, balancedChamber, 79, violinDb) && shifted(balanced, balancedChamber, 57, violaDb));
+      // layers: the score's 0 over the ini's 1, the score's 1 over the ini's 0
+      Playback::setIniValuesForTest(chamber);
+      score->setMetaTag(Playback::metaTag, "levels/stringSections=0");
+      QCOMPARE(Playback::value("levels/stringSections", score), 0.0);
+      QVERIFY(shifted(full, levels(), 57, 0.0));
+      Playback::setIniValuesForTest(libraryDefault);
+      score->setMetaTag(Playback::metaTag, "levels/stringSections=1");
+      QCOMPARE(Playback::source("levels/stringSections", score), Playback::Source::SCORE);
+      QVERIFY(shifted(full, levels(), 57, violaDb));
+      score->setMetaTag(Playback::metaTag, "");
+      // (the composer's choice: in neither preset)
+      for (const Playback::Preset& p : Playback::presets())
+            for (const auto& kv : p.values)
+                  QVERIFY2(QString(kv.first) != "levels/stringSections", p.id);
+      delete score;
+      // the shipped maps: the five string sections and their extras, SSO's section sizes; nothing else
+      const std::map<QString, std::pair<int, int>> sections { { "Violins 1", { 1, 16 } }, { "Violins 2", { 2, 14 } }, { "Violas", { 3, 12 } },
+                                                              { "Celli", { 4, 10 } }, { "Basses", { 5, 8 } } };
+      for (const char* file : { "Spitfire Symphony Orchestra.xml", "Vial Instrumental.xml", "Vial Instrumental (Fuse).xml" }) {
+            QString error;
+            auto m = SoundLib::Library::load(root + "/../share/soundlibraries/" + file, &error);
+            QVERIFY2(m, qPrintable(error));
+            int found = 0;
+            for (const SoundLib::LibInstrument& li : m->instruments) {
+                  const QString section = li.with.isEmpty() ? li.name : li.with;
+                  const std::pair<int, int> want = sections.count(section) ? sections.at(section) : std::make_pair(0, 0);
+                  QVERIFY2(li.stringSection == want.first && li.players == want.second,
+                           qPrintable(QString("%1 %2: %3 / %4").arg(file, li.name).arg(li.stringSection).arg(li.players)));
+                  found += li.with.isEmpty() && li.stringSection > 0;
+                  }
+            QVERIFY2(found == 5, file);
+            }
       }
 
 //---------------------------------------------------------

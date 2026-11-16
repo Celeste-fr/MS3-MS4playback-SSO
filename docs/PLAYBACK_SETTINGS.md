@@ -92,6 +92,9 @@ run's spacing following the onsets (Recommended until 2026-10-08); the Preset bo
 `slurs/plainAuto` is 3 in Recommended and by default, 0 in Library default since 2026-11-16 (1 from 2026-10-26; below,
 Plain Performance › Plain Auto › Recommended plays 3); 1, 2 or 4 by hand shows "(Custom)".
 
+`levels/stringSections` (String section size, below) is in neither preset (2026-11-16): the composer's choice, set per
+score, played in both, as phrase marks are.
+
 Phrase marks' swells (Phrase swell, below) are no setting: each phrase mark's own Amount and Peak, composer's marks
 played in every preset, as hairpins are (2026-11-07, branch `phrase-shape`).
 
@@ -748,6 +751,40 @@ strings 10.26-12.43 dB lower; HANDOFF.md › Section balance › Winds).
 
 Test: `tst_soundlibrary::levelSectionBalance` (the levels, the volumes, each note's level, the layers, a map without
 levels, the shipped map's M and sectionLevel2 for all 28 patches, sectionLevel2 by mode with extras and fallback, a flute and Trumpets a6 on it under 1 and 2), `tst_liveequivalence::liveSectionBalance` (Live's clips, the route set's and the plain set's Kontakt volumes).
+
+### String section size
+
+`[levels] stringSections` (branch `rec-repeat-strings`, 2026-11-16; `libmscore/contextlevel.h` › String section size). The
+owner, on re-test 3's option "A score can say full / chamber strings (the composer's choice); default stays full": "Yes,
+per-score setting (Recommended)". How many players a string section has is a performance choice, so it is set per score
+(Mixer › Advanced Options… › Playback adjustments › Loudness › String sections: editing it writes the score's
+`playbackSettings` metaTag, left out while the score has no value of its own) and is in neither preset (played in both, as
+phrase marks are; no other level setting is needed: in Library default the gain stage carries it alone).
+
+- **Full** (0, the default): the sound library's own sections; nothing changes.
+- **Chamber** (1): every patch of a string section plays 10 log10(n_chamber / n_library) dB.
+  - n_library: the map's `<Instrument players>` on the five sections' main patches (their extras take it): SSO 16 / 14 /
+    12 / 10 / 8 (Spitfire's product page; the same sizes the section balance uses, `gen_spitfire_sso.py`
+    `STRING_SECTIONS`); Vial Instrumental's SSO imitations take SSO's (`gen_vial.py`).
+  - n_chamber: **one real ensemble**, the orchestra of the Spheres dataset's K. 550 recording: 6 violins, 4 violas, 3 celli,
+    2 basses (the dataset paper, via the private demo-k550 PLAN.md). The violins' split into firsts and seconds isn't
+    stated: 3 / 3 here, **an assumption**. A multi-source table of period / chamber orchestra sizes doesn't exist yet.
+  - Players add as incoherent powers (10 log10 n, the scaling the section balance's sizes and the divisi level already
+    use): **an assumption, no measured data** of one section recorded at different sizes.
+  - On SSO: Violins 1 -7.27, Violins 2 -6.69, Violas -4.77, Celli -5.23, Basses -6.02 dB (computed).
+- Where it plays: in `ContextLevel::volumes` with the section level O (`Volumes::patchDb`), so on each patch's gain stage
+  (`TrackDelays::gainStageDb`): hosted playback and export on the plug-in slot, Live's plain set and route set by the
+  "MuseScore gain" Utility (Create / Update Live Set), MIDI out by CC7 (`TrackDelays::midiVolumes`); the master trim
+  counts it (a quieter string section may need less trim, so everything else may come up together). No CC11, no other
+  samples: Live's clips are unchanged. Chosen there rather than as CC11 because it is a constant per patch, as the section
+  balance is, and the gain stage is the one place every output already carries.
+- Not affected: solo strings (Solo Violin 1 / 2, Solo Viola, Solo Cello), the Strings Ensemble patch, every other
+  instrument, built-in parts (MS3 and MS4 modes play as before: the setting reads only map `strings` / `players`).
+- Tests: `tst_soundlibrary::levelStringSections` (layers, the dB on each note, with and without the section balance, the
+  shipped maps), `tst_liveequivalence::liveStringSections` (route set, plain set, MIDI out's CC7, clips).
+- Why: re-test 3 (K. 550 i bars 14-15) found SSO's 16-violin sections against one solo wind a likely part of "balance
+  awful": the computed effect of Spheres' sizes in those bars is the winds +4..+7 dB closer to the strings (an
+  assumption-based computation, not measured, not heard).
 
 ### Real range
 
@@ -2792,6 +2829,7 @@ Ini key = `[section] key`. "Map" = per-patch data in `share/soundlibraries/Spitf
 | Plain accents, `[slurs] plainAccents` (2026-10-20; 2 since 2026-10-21, the owner's choice at real players' level): under plainPerformance an accent, marcato or soft accent plays 1 MS4.7.5's offset for its articulations (40 log10 share, strings +5.3 dB) by the dynamics CC along the patch's curve, slurred notes too; 2 an accent or marcato on an attack the Performance legato's accented attack (SSO 122) instead of 64, a touching note re-attacked (reattackGap), by CC11 at real players' +5.0 dB over the spiccato attack (the map's `accentedLevel` by pitch and length, `PLAIN_ACCENT_DB`); 3 both (above, Plain accents) | 2 (Recommended 2, Library default 0) | `rendermidi.cpp` (`performanceNote`'s `accentDb`, `marcatoLevel`'s `plainAccentDb`), map `accentedLevel` | `[slurs] plainAccents`; score: `playbackSettings` |
 | Level rule: a slur on a string section's Performance legato plays CC1 at the written dynamic and one gain per slur (by its dynamic, median spacing and pitch) by CC11 and the patches' gain stage, the rest of the part's patches at 0 dB (above, Level rule; the owner, 2026-10-10; the gain stage 2026-10-15); with `[slurs] plainPerformance` a plain note takes its kind's grid (slur / staccato + calibrated 2's D / single note; 2026-10-17) | 1 (on; Recommended 1, Library default 0) | `contextlevel.cpp` (`ContextLevel::gain`, `plainKind`, `volumes`), `rendermidi.cpp` `contextDb`, `TrackDelays::read` / `patchGain`; data: map `contextLevel`, `contextLevelPlain` / `Staccato` / `Single` from `level_rule.py` | `[levels] context`; score: `playbackSettings` |
 | Section balance: every patch of a section its map `sectionLevel2` (2, Clark & Luce) or `sectionLevel` (1, TU Berlin) louder by its volume, with the level rule each phrase at gain + its section's level, by the patches' gain stage less the score's master trim (above, Section balance, Gain stage and master trim; the owner, 2026-10-11: M, Weinzierl et al. 2018's sound power against SSO's measured `sso_cc1_curves.json`) | 2 (Clark & Luce; Recommended 2, Library default 0; 1 TU Berlin) | `contextlevel.cpp` (`ContextLevel::volumes`, `sectionBalanceMode`), `LibInstrument::sectionLevelFor`, `TrackDelays::patchGain`; data: map `sectionLevel2` / `sectionLevel` from `gen_spitfire_sso.py` `SECTION_LEVEL2` / `SECTION_FADERS` | `[levels] sectionBalance`; score: `playbackSettings` |
+| String section size: Full (the library's own sections, nothing changes) or Chamber, set per score (the composer's choice): every patch of the five string sections 10 log10(chamber / map `players`) dB by its gain stage, with the section level, so hosted, export, Live's sets (Utility) and MIDI out (CC7) carry it (below, String section size; the owner, 2026-11-16) | 0 Full (in neither preset; played in both) | `contextlevel.cpp` (`ContextLevel::stringSections`, `chamberPlayers`, `stringSectionDb`, `volumes`), `LibInstrument::stringSection` / `players`; data: map `strings` / `players` from `gen_spitfire_sso.py` `STRING_SECTIONS` (Vial: `gen_vial.py` copies SSO's) | `[levels] stringSections`; score: `playbackSettings` |
 | Gain stage and master trim: the levels above are each patch's own gain after its Kontakt (hosted: the slot's output; Live: MuseScore's Utility, "MuseScore gain"; MIDI out: CC7), uncapped, less one master trim per score that keeps its loudest moment (calibrated levels + the map's crest, powers added) from clipping; the fader keeps the Mixer and the track levels (above, Gain stage and master trim; the owner, 2026-10-15) | with any level setting on (none in Library default); no setting | `contextlevel.cpp` (`masterTrim`), `TrackDelays::gainStageDb` / `faderGain` / `patchGain` / `midiVolumes`, `LiveSetWriter::kontaktGains` / `utilityDevice`, `livesetupdate.cpp`, `liveset.cpp`; data: map `<Dynamics crest>` from `sso_crest.json` | none (follows the level settings) |
 | Even levels: each slurred note on a Performance legato patch with a correction measured in place (Tools › Even Out Levels…, `--even-levels`) plays it by CC11 gliding in dB between the notes' nodes (halfway from each note-on to the next, since 2026-10-14), every 5 ms; a correction whose context changed is stale and not played; each patch's largest by its volume (above, Even levels; the owner, 2026-10-12, the blind test's Glide) | 1 (Recommended, the default; 0 in Library default; the owner, 2026-10-13) | `evenlevels.cpp`, `rendermidi.cpp` `libraryEvenLevels` / `trackLevel`, `TrackDelays::read` / `evenDb` / `patchGain`, `mscore/evenlevelsjob.cpp`; data: the score's metaTag `evenLevels` | `[levels] evenLevels`; score: `playbackSettings` |
 | Divisi level, `[levels] divisi` (the owner, 2026-10-20): while n voices of a monophonic patch's part (voice lanes) sound together, each note plays 10 log10(n) dB softer by CC11 (2: -3.0, 3: -4.8 dB), the line's too, so the chord adds up to one section; a note keeps its start's level; an assumption from player counts, no divisi data (above, Divisi level) | 1 (Recommended, the default; 0 in Library default) | `soundlibrary.cpp` (`lanes`: `Lanes::sounding`, `divisiDb`), `rendermidi.cpp` (`divisiLevel`, `libDivisi`, `libraryNoteLevels`) | `[levels] divisi`; score: `playbackSettings` |

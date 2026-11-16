@@ -233,6 +233,12 @@ changes one tick after their chord; the technique comes from the notation.
     `libraryTransitionTails`); `attackLevels` 2 (`attackSwitch`, `libAttackOnset`); `hallGuard` 0 in both presets until the
     owner decides (`libraryHallGuard`, the audit's HALL); `divisi` 1 (see Chords); `micCompensation`, `lowCut`, `evenLevels`:
     below.
+  - `[levels] stringSections` (String section size; the owner, 2026-11-16: per score, the composer's choice, so in neither
+    preset and played in both): 0 Full (the library's own sections), 1 Chamber: every patch of the five string sections 10
+    log10(chamber / map `<Instrument strings players>`) dB on its gain stage with the section level (`ContextLevel::
+    stringSectionDb`, `Volumes::patchDb`, so Live's Utility and MIDI out's CC7 too); chamber = one real ensemble, Spheres'
+    K. 550 orchestra 3 / 3 / 4 / 3 / 2 (the violins' split an assumption), the power sum an assumption; SSO 16 / 14 / 12 / 10
+    / 8, Vial the same; MS3 / MS4 parts unchanged. Edited in Playback adjustments › Loudness › String sections.
 - **Slurs and Performance patches** (the five string sections' Performance legato; detail › Plain Performance etc.):
   - `[slurs] quick` 2 (only under staff text "non performance"): short slurred notes on Long (Rachm.), early by its own onset,
     `[slurs] quickLevel` 1 as loud as the held one (`quickLevel`, `quickDb`; Violins 1 / 2 only, `RACHM_UNUSED`).
@@ -582,15 +588,16 @@ Last recorded counts (with init and cleanup; the date of each is in the commit t
 "Moved from CLAUDE.md, 2026-11-11"). Say which you ran; nothing here was re-run on the Linux dev machine for this file except
 the Lua standalone check.
 
-- `tst_soundlibrary`: 170 passed, 7 skipped with the default helpers (2026-11-12, with remoteNoStall; `vst3UnloadModules` skips with helpers); in-process
+- `tst_soundlibrary`: 171 passed, 7 skipped with the default helpers (2026-11-16, with levelStringSections; before: 170, 2026-11-12, with remoteNoStall; `vst3UnloadModules` skips with helpers); in-process
   (`MS_VST3_HOST_PROCESSES=0`) 170 passed, 6 skipped before remoteNoStall (not re-run). The skips need the owner's files: `MS_ROUTES_SCORE`, `SSO_NKI` /
   `SSO_EMPTY`, `MS_EXTRACT_PLUGIN` + `MS_EXTRACT_OUT`; `SSO_KICKSTART_NKI` extends two Kontakt tests;
   `playbackVerifyRegression` needs `MS_VERIFY_REGRESSION` (VERIFY.md › Detector regression). `Playback::setIniValuesForTest`
   pins some settings unless a test sets them (plainPerformance 0, lowCut 1), so older tests keep their expectations.
 - `tst_playbackaudit`: 14 passed, 1 skipped (`auditScore` needs `MS_AUDIT_SCORE`: VERIFY.md › Playback audit). Baseline, Whence
   (quarter tones), Recommended, 2026-10-29: ARRIVAL 33 fail / 7 warn, LEVEL STEP 26 info, every other kind 0 (the heard check on
-  the real sound, build 491: 35 fail / 19 warn; build 564, 2026-11-13: 32 fail / 20 warn, no regression, one take).
-- `tst_liveequivalence` (links mscoreapp; uses tst_soundlibrary's test synth): 96 passed, 5 skipped (2026-11-12, with libraryChangeDuringLoad's three rows) (tools, not tests:
+  the real sound, build 491: 35 fail / 19 warn; build 564, 2026-11-13: 32 fail / 20 warn, no regression, one take). Re-run 2026-11-16
+  with plainAuto 3 in Recommended: the same counts, the report identical to plainAuto 1's.
+- `tst_liveequivalence` (links mscoreapp; uses tst_soundlibrary's test synth): 97 passed, 5 skipped (2026-11-16, with liveStringSections) (tools, not tests:
   `dumpEvents`, `utilitySet`, `scriptValuesSet`, `chunkCompare`; `twoLibraries` without `MS_VIAL_VST3`). `dumpEvents` takes
   `MS_DUMP_SCORE`, `MS_DUMP_MAP`, `MS_DUMP_OUT`, `MS_DUMP_SETTINGS`, `MS_DUMP_CHUNKED` (renders as playback does), `MS_DUMP_LIVE`
   (as Live's clips, plus kontakts.txt / routes.txt / multis.txt), `MS_DUMP_TIMING`; every dump writes routemap.txt and

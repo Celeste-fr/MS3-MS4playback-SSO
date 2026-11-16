@@ -49,6 +49,23 @@
 //   M. Clark, D. Luce, J. Audio Eng. Soc. 13(2), 1965: orchestral players' scales at mp as sound power
 //   (section_balance_cl.py); a patch without sectionLevel2 plays its sectionLevel.
 //
+//   String section size (playback setting [levels] stringSections, set per score; the owner, 2026-11-16: "Yes, per-score
+//   setting (Recommended)" to "A score can say full / chamber strings (the composer's choice); default stays full"): how
+//   many players the five string sections have is a performance choice, the composer's, so it is in no preset and plays
+//   in every one. Full (0, the default): the library's own sections, nothing changes. Chamber (1): every patch of a string
+//   section (the map's <Instrument strings players>, the main patch's, its extras take it) plays
+//       10 log10(n_chamber / n_library) dB
+//   on top, by the same volumes as the section level O (Volumes::patchDb: the gain stage), so hosted playback, the export,
+//   Live's plain set and route set (MuseScore's Utility) and MIDI out (CC7) all carry it, and the master trim counts it.
+//   n_library: SSO 16 / 14 / 12 / 10 / 8 (Spitfire's product page, as section_balance_cl.py's section sizes); Vial's SSO
+//   imitations the same. n_chamber: one real ensemble, the Spheres dataset's K. 550 orchestra (6 violins, 4 violas, 3
+//   celli, 2 basses; the violins' split isn't stated: 3 / 3 here, an assumption), chamberPlayers. Players add as
+//   incoherent powers (10 log10 n, the same scaling as the section balance's section sizes and the divisi level): an
+//   assumption, no measured data of sections of different sizes. On SSO: Violins 1 -7.27, Violins 2 -6.69, Violas -4.77,
+//   Celli -5.23, Basses -6.02 dB. Only levels change (no other samples, no other timbre); solo strings, the Strings Ensemble
+//   and parts in MS3 / MS4 mode are unchanged. It needs no other level setting (Library default too: the gain stage then
+//   carries it alone).
+//
 //   Real range (playback setting [levels] realRange; the owner, 2026-10-12, stage A of the dynamics plan, HANDOFF.md ›
 //   Dynamics like a real player): a written dynamic is one gesture. In SSO CC1 (and a short's velocity) picks the
 //   recording, mostly tone; CC11 and the patch's volume are loudness only. So each note of a patch with the map's
@@ -164,6 +181,13 @@ bool on(const Score* score);
 bool sectionBalance(const Score* score);
 // which: 0 none, 1 sectionLevel (TU Berlin single notes, Meyer mp), 2 sectionLevel2 (Clark & Luce at playing levels)
 int sectionBalanceMode(const Score* score);
+// [levels] stringSections for the score: 0 full, 1 chamber (String section size above)
+int stringSections(const Score* score);
+// the chamber orchestra's players in a string section (1 Violins 1 .. 5 Basses: 3, 3, 4, 3, 2); 0: none
+int chamberPlayers(int section);
+// the dB a patch plays at that string section size: 10 log10(chamberPlayers / the map's players) for chamber on a string
+// section with players; else 0
+double stringSectionDb(const SoundLib::LibInstrument& patch, int size);
 // whether the articulation has a measured context level
 bool has(const SoundLib::Articulation* a);
 // whether a patch has an articulation with one (a Performance patch)
@@ -227,7 +251,8 @@ double micOffsetDb(const SoundLib::LibInstrument& patch, const SoundLib::Library
 
 struct Volumes {
       // patch -> its gain stage in dB (Gain stage below: the rule's G or 0; section balance: O (+ the part's T); real range:
-      // + R; mics: + C), never lowered to fit Live's fader (until 2026-10-15 this was less S')
+      // + R; mics: + C; string section size: + its dB, with O), never lowered to fit Live's fader (until 2026-10-15 this was
+      // less S')
       std::map<QString, double> patchDb;
       std::map<QString, double> micTop;     // [levels] micCompensation: patch -> its largest C over the part's notes (in patchDb)
       double top { 0.0 };                   // G, T (section balance: min(G, S' + MAX_DB - O - R))

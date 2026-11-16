@@ -454,6 +454,16 @@ def scriptAttributes(patch):
 # Violas C3 131 -> 100, Celli C2 65.4 -> 50; the Basses 25, a compromise (C1 32.7 of the extension -0.5 dB, E1 41.2
 # -0.08 dB; 25-40 Hz of the bursts stays). Measured on the run-bends A/B clips: docs/PLAYBACK_SETTINGS.md › Low cut
 LOW_CUT = {'Violins 1': 150, 'Violins 2': 150, 'Violas': 100, 'Celli': 50, 'Basses': 25}
+# [levels] stringSections (2026-11-16, the owner: "Yes, per-score setting (Recommended)", a score says full / chamber
+# strings): the five string sections' main patches say which section they are and how many players SSO recorded
+# (<Instrument strings players>; the extras take them): 16 / 14 / 12 / 10 / 8, Spitfire's product page (the section sizes
+# section_balance_cl.py and SECTION_FADERS already use). contextlevel.h › String section size plays a chamber section
+# 10 log10(n_chamber / players) dB softer
+STRING_SECTIONS = {'Violins 1': ('violins1', 16), 'Violins 2': ('violins2', 14), 'Violas': ('violas', 12),
+                   'Celli': ('celli', 10), 'Basses': ('basses', 8)}
+def stringSectionAttributes(patch):
+    s = STRING_SECTIONS.get(patch)
+    return f' strings="{s[0]}" players="{s[1]}"' if s else ''
 LOW_CUT_PATCH = re.compile(r'^(?:Strings - )?(Violins 1|Violins 2|Violas|Celli|Basses)(?: |$)')
 def lowCut(patch):
     m = LOW_CUT_PATCH.match(patch)
@@ -1870,7 +1880,8 @@ for i, line in enumerate(out):
                 out[i] = out[i][:-len(end)] + f' lowCut="{lowCut(current):g}"' + end
             if current in SECTION_FADERS:
                 end = '/>' if out[i].endswith('/>') else '>'
-                out[i] = out[i][:-len(end)] + sectionLevelAttributes(current) + realRangeAttributes(current) + end
+                out[i] = out[i][:-len(end)] + sectionLevelAttributes(current) + realRangeAttributes(current) \
+                         + stringSectionAttributes(current) + end
             elif current in REAL_RANGE_WINDS:
                 end = '/>' if out[i].endswith('/>') else '>'
                 # (the gap patches, section_balance_cl.py GAP, real_range.py GAP_OWN / GAP_FAMILY: sectionLevel2 only)

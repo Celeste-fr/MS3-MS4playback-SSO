@@ -508,6 +508,13 @@ struct LibInstrument {
       bool hasSectionLevel2 { false };
       // the section level [levels] sectionBalance plays: 0 none, 1 sectionLevel, 2 sectionLevel2 (else sectionLevel)
       double sectionLevelFor(int mode) const { return mode <= 0 ? 0.0 : mode == 2 && hasSectionLevel2 ? sectionLevel2Db : sectionLevelDb; }
+      // [levels] stringSections (contextlevel.h › String section size; the owner, 2026-11-16: a score says full or chamber
+      // strings, the composer's choice): which of the five string sections the patch plays (<Instrument strings=
+      // "violins1|violins2|violas|celli|basses">, on the main patch; its extras take it) and how many players its recording
+      // has (<Instrument players>: SSO 16 / 14 / 12 / 10 / 8, Spitfire's product page; Vial's SSO imitations the same).
+      // 0: not a string section (solo strings, the Strings Ensemble, every other patch)
+      int stringSection { 0 };                              // 1 Violins 1, 2 Violins 2, 3 Violas, 4 Celli, 5 Basses
+      int players { 0 };
       // [levels] realRange (contextlevel.h › Real range; the owner, 2026-10-12, stage A), on the main patch, its
       // extras take them: one real player's ff - pp in dB per pitch (<Instrument realSpan="pitch:dB ...">: Weinzierl et al.
       // 2018, smoothed; gen_spitfire_sso.py, real_range.py), and the patch's held Long's level against CC1 64 per CC1 and
