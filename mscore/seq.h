@@ -126,14 +126,17 @@ enum class Transport : char {
 //    [soundlibrary] renderAhead ms (500; MS_RENDER_AHEAD wins), read when the audio device starts (Seq::init: start,
 //    a change in Preferences › I/O). 0: the audio callback renders each block itself (processDirect), as before, not
 //    a line of it changed. > 0: one producer thread (realtime priority: MMCSS "Pro Audio" / SCHED_FIFO, as the
-//    helper processes' audio thread; never in a kheap LoadScope) runs processDirect for every block: every synth,
-//    effect and hosted plug-in (in-process or the helpers' post / collect) is processed there only, never by the
-//    callback, which copies finished frames (process). Blocks are the callback's own frame count, so the same events
+//    helper processes' audio thread; never in a kheap LoadScope) runs processDirect for every lead block: every
+//    synth, effect and hosted plug-in (in-process or the helpers' post / collect) is processed there while the play
+//    leads, the callback copying finished frames (process); stopped and in a play without a lead the callback renders
+//    each block itself (produceAhead on its own thread, one thread at a time: RenderAhead::_renderMutex). Blocks are the callback's own frame count, so the same events
 //    fall on the same frames and the audio is sample-identical (null-tested, NOTES / HANDOFF › Render ahead).
 //      lead     while playing (a block rendered with state PLAY) the producer keeps up to renderAhead ms queued; a
 //               play leads only when nothing leaves MuseScore with its own timing (MIDI out, MIDI sync, Live plays
 //               the score, a Live track, JACK: _raEligible, decided at Play's start), else it plays as stopped
-//      stopped  no lead: the callback asks the producer for its block and waits for it (up to 90 % of its budget):
+//      stopped  no lead: the callback renders its block itself, as direct (it used to ask the producer and wait up
+//               to 90 % of its budget: a producer woken late made that block silent, the owner's chopped playback with
+//               MIDI out set, 2026-11-23; the VM: WASAPI + MIDI out, ~4.5 % of blocks silent, direct none):
 //               a clicked or entered note (playNotes, sendEvent: CLAUDE.md › Clicked / entered notes, stopped only)
 //               and MIDI input sound at the same callback as before. Playing, a click plays 3.6's click, as before,
 //               heard renderAhead later (note entry doesn't run while playing)

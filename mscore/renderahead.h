@@ -6,13 +6,15 @@
 //  approved). Seq's header (seq.h › Render ahead) has the design; this is its engine, Seq-free so a test can drive it.
 //
 //    producer    one thread (realtime priority: MMCSS "Pro Audio" on Windows, SCHED_FIFO where allowed, as the helper
-//                processes' audio threads) renders blocks with the producer function (Seq::processDirect: every synth
-//                and plug-in is processed on this thread only) into a ring of frames, each block with a record
-//                (Block: may it be heard later than rendered, was what came before it stale, its play position, a
-//                message for the GUI to send when it is heard)
+//                processes' audio threads) renders the lead blocks with the producer function (Seq::processDirect)
+//                into a ring of frames, each block with a record (Block: may it be heard later than rendered, was
+//                what came before it stale, its play position, a message for the GUI to send when it is heard)
 //    lead        while the blocks say lead (playing), the producer keeps up to leadMs of audio queued; the callback
-//                only copies. A block not to be heard late (stopped: clicked notes, MIDI input) is rendered when the
-//                callback asks for it and waits for it (sync): no lead, as direct
+//                only copies. A block not to be heard late (stopped: clicked notes, MIDI input; a play without a lead:
+//                MIDI out, sync, Live, JACK) the callback renders itself into the ring and plays at once: as direct,
+//                one block at a time, never two threads at once (_renderMutex). It used to ask the producer and wait
+//                for it (up to 90 % of its time): whenever the producer woke late the block was silent and heard one
+//                callback later, every other block silent at worst (the owner's chopped playback, 2026-11-23)
 //    prefill     the first lead block (Play's start, a seek while playing) is heard once leadMs of audio is queued
 //                (or the lead ended): Play's start waits up to the time it takes to render leadMs
 //    flush       a block with flush drops every frame before it unheard (a seek, Stop: the GUI messages of the dropped
@@ -127,6 +129,7 @@ class RenderAhead {
             Block block;
             };
       void producerLoop();
+      bool renderBlock(bool producer, bool* hold);
       void setRealtimePriority();
       void deliverUpTo(uint64_t rec);
       unsigned blockFrames() const;
@@ -143,16 +146,14 @@ class RenderAhead {
       std::atomic<uint64_t> _recWrite { 0 };    // records written (producer)
       std::atomic<uint64_t> _recRead { 0 };     // records fully read (callback)
       uint64_t _recDelivered { 0 };             // (callback) records whose message was sent
-      uint64_t _flushStart { 0 };               // (producer) the last flush block's start
+      std::atomic<uint64_t> _flushStart { 0 };  // the last flush block's start (written under _renderMutex)
 
-      std::atomic<uint32_t> _reqSeq { 0 };      // the callback asks for a block (sync)
-      std::atomic<uint32_t> _doneSeq { 0 };
       std::atomic<bool> _producerLead { false }; // the last block written was a lead block
       std::atomic<unsigned> _block { 256 };     // the callback's frames: the producer's block
 
       std::mutex _mutex;
+      std::mutex _renderMutex;                  // held while a block is rendered into the ring (producer or callback)
       std::condition_variable _wakeProducer;
-      std::condition_variable _wakeCallback;
       std::atomic<bool> _quit { false };
       std::atomic<bool> _running { false };
       std::thread _thread;

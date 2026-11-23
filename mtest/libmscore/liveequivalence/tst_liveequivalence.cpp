@@ -11508,7 +11508,10 @@ void TestLiveEquivalence::editLagIdentical()
 //    a known signal of the play position, a lead block), the callback paced in real time (512 frames at 48 kHz), what
 //    is heard captured: lead 500 heard exactly as rendered from Play's start to the score's end; a producer stall of
 //    300 ms (under the lead) nothing late; 900 ms (over it) only silence inserted (the rest exact, never a repeat) and
-//    underruns counted; a seek while playing (a flush) nothing of the old position heard after it; lead 50 exact
+//    underruns counted; a seek while playing (a flush) nothing of the old position heard after it; lead 50 exact.
+//    A play without a lead (MIDI out, sync, Live, JACK) heard exactly, also when each block takes 92 % of its time: the
+//    callback renders it itself (handed to the producer and waited for, every other block was silent: the owner's
+//    chopped playback, 2026-11-23)
 //---------------------------------------------------------
 
 namespace {
@@ -11521,6 +11524,8 @@ struct RaFake {
       int stallAt = -1, stallMs = 0;
       bool stalled = false;
       int endFrame = 48000 * 3;
+      bool noLead = false;
+      int slowUs = 0;
       RenderAhead::Block produce(unsigned n, float* out)
             {
             RenderAhead::Block b;
@@ -11538,11 +11543,14 @@ struct RaFake {
                   stalled = true;
                   std::this_thread::sleep_for(std::chrono::milliseconds(stallMs));
                   }
+            if (playing && slowUs > 0)
+                  std::this_thread::sleep_for(std::chrono::microseconds(slowUs));
             for (unsigned i = 0; i < n; ++i) {
                   out[2 * i] = playing ? raSignal(playFrame + int(i), 0) : 0.f;
                   out[2 * i + 1] = playing ? raSignal(playFrame + int(i), 1) : 0.f;
                   }
-            b.playing = b.lead = playing;
+            b.playing = playing;
+            b.lead = playing && !noLead;
             if (playing) {
                   playFrame += int(n);
                   if (playFrame >= endFrame) {
@@ -11554,11 +11562,13 @@ struct RaFake {
             }
       };
 struct RaResult { size_t frames; int mismatches; int zeros; int underruns; int lastRef; };
-static RaResult raRun(int lead, int stallAt, int stallMs, int seekAtHeard, int seekTo)
+static RaResult raRun(int lead, int stallAt, int stallMs, int seekAtHeard, int seekTo, bool noLead = false, int slowUs = 0)
       {
       RaFake f;
       f.stallAt = stallAt;
       f.stallMs = stallMs;
+      f.noLead = noLead;
+      f.slowUs = slowUs;
       RenderAhead ra;
       AudioCapture cap;
       cap.data.assign(size_t(48000) * 20 * 2, 0.f);
@@ -11601,8 +11611,9 @@ static RaResult raRun(int lead, int stallAt, int stallMs, int seekAtHeard, int s
             ++ref;
             }
       r.lastRef = ref;
-      qDebug("renderAheadEngine: lead %d stall %d ms at %d, seek at %d: %zu frames heard, %d differ, %d silent, %d underruns",
-             lead, stallMs, stallAt, seekAtHeard, r.frames, r.mismatches, r.zeros, r.underruns);
+      qDebug("renderAheadEngine: lead %d stall %d ms at %d, seek at %d, no lead %d, %d us a block: %zu frames heard, %d differ, "
+             "%d silent, %d underruns", lead, stallMs, stallAt, seekAtHeard, int(noLead), slowUs, r.frames, r.mismatches, r.zeros,
+             r.underruns);
       return r;
       }
 }
@@ -11631,6 +11642,16 @@ void TestLiveEquivalence::renderAheadEngine()
       RaResult e = raRun(50, -1, 0, -1, 0);
       QCOMPARE(e.mismatches, 0);
       QCOMPARE(e.zeros, 0);
+      RaResult g = raRun(500, -1, 0, -1, 0, true, 0);
+      QCOMPARE(g.mismatches, 0);
+      QCOMPARE(g.zeros, 0);
+      QCOMPARE(g.underruns, 0);
+      QCOMPARE(g.lastRef, a.lastRef);
+      RaResult h = raRun(500, -1, 0, -1, 0, true, 9800);    // (92 % of a 512-frame block's 10.67 ms)
+      QCOMPARE(h.mismatches, 0);
+      QCOMPARE(h.zeros, 0);                       // (before the fix: 143872, every other block)
+      QCOMPARE(h.underruns, 0);
+      QCOMPARE(h.lastRef, a.lastRef);
       }
 
 #include "tst_liveequivalence.moc"

@@ -451,9 +451,10 @@ changes one tick after their chord; the technique comes from the notation.
   callback stall while loading; `tst_soundlibrary::remoteNoStall`). Untried: Ample and the editor window in a helper.
 - **Render ahead** (header of `mscore/seq.h`, engine `mscore/renderahead.h`; the owner approved; docs/PLAYBACK_SETTINGS.md ›
   Render ahead): `[soundlibrary] renderAhead` 500 ms (`MS_RENDER_AHEAD` wins; 0 = the callback renders). One producer thread
-  (MMCSS Pro Audio / SCHED_FIFO, never a kheap LoadScope) runs `Seq::processDirect` for every block, so the audio is
+  (MMCSS Pro Audio / SCHED_FIFO, never a kheap LoadScope) runs `Seq::processDirect` for every lead block, so the audio is
   sample-identical; the callback (`Seq::process`) copies. Playing: up to renderAhead ms queued; no lead with MIDI out / sync /
-  Live / JACK; stopped: no lead. Seek, Stop, device change drop what was rendered ahead; changes while playing heard
+  Live / JACK; stopped: no lead. Without a lead the callback renders each block itself (one thread at a time,
+  `RenderAhead::_renderMutex`): a handoff per block to the producer made every block it answered late silent (2026-11-23). Seek, Stop, device change drop what was rendered ahead; changes while playing heard
   renderAhead later. Underrun: silence. **Late audio**: three late callbacks / underruns within 1 s show "Playback couldn't
   keep up: audio was late %n time(s). …" once per play and a line in `load times.log`. Test tools: `-a null`,
   `MS_PLAY_CAPTURE`, `MS_AUDIO_STALL`, `tools/playbackverify/render_ahead_check.sh` / `render_ahead_null.py`.

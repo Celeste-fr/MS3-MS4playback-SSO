@@ -66,8 +66,6 @@ bool RenderAhead::start(int leadMs, int sampleRate, Produce produce, Attention a
       _recRead = 0;
       _recDelivered = 0;
       _flushStart = 0;
-      _reqSeq = 0;
-      _doneSeq = 0;
       _producerLead = false;
       _inLead = false;
       _prefill = false;
@@ -95,7 +93,6 @@ void RenderAhead::stop()
             _quit = true;
       }
       _wakeProducer.notify_all();
-      _wakeCallback.notify_all();
       _thread.join();
       _ring.clear();
       _records.clear();
@@ -157,73 +154,76 @@ void RenderAhead::producerLoop()
       using Clock = std::chrono::steady_clock;
       Clock::time_point holdUntil = Clock::time_point::min();
       while (!_quit.load(std::memory_order_acquire)) {
-            const uint64_t w = _write.load(std::memory_order_relaxed);
-            const uint64_t r = _read.load(std::memory_order_acquire);
-            const uint64_t rw = _recWrite.load(std::memory_order_relaxed);
-            const uint64_t rr = _recRead.load(std::memory_order_acquire);
-            const unsigned block = blockFrames();
-            const uint32_t req = _reqSeq.load(std::memory_order_acquire);
-            const bool sync = req != _doneSeq.load(std::memory_order_relaxed);
-            const bool lead = _producerLead.load(std::memory_order_relaxed);
-            const uint64_t queued = w - std::max(r, _flushStart);
-            bool need = sync;
-            if (!need && lead) {
+            bool need = false;
+            if (_producerLead.load(std::memory_order_acquire)) {
+                  const uint64_t queued = _write.load(std::memory_order_acquire)
+                                          - std::max(_read.load(std::memory_order_acquire), _flushStart.load(std::memory_order_acquire));
                   if (queued < _leadFrames && Clock::now() >= holdUntil)
                         need = true;
                   else if (_attention && _attention())
                         need = true;
                   }
-            const bool room = w + block - r <= _capacity && rw + 1 - rr <= RECORDS;
-            if (need && room) {
-                  Block b = _produce(block, _scratch.data());
-                  if (b.hold) {
-                        holdUntil = Clock::now() + std::chrono::milliseconds(20);
-                        if (sync) {
-                              {
-                                    std::lock_guard<std::mutex> lock(_mutex);
-                                    _doneSeq.store(req, std::memory_order_release);
+            if (need) {
+                  // (the callback renders a block itself only while nothing leads: the lock is free but for a moment)
+                  std::unique_lock<std::mutex> render(_renderMutex);
+                  if (_producerLead.load(std::memory_order_acquire)) {
+                        bool hold = false;
+                        if (renderBlock(true, &hold)) {
+                              holdUntil = Clock::time_point::min();
+                              continue;
                               }
-                              _wakeCallback.notify_all();
-                              }
-                        std::unique_lock<std::mutex> lock(_mutex);
-                        _wakeProducer.wait_for(lock, std::chrono::milliseconds(1));
-                        continue;
+                        if (hold)
+                              holdUntil = Clock::now() + std::chrono::milliseconds(20);
                         }
-                  holdUntil = Clock::time_point::min();
-                  if (b.lead && _stallAt >= 0 && !_stalled && b.frame >= _stallAt * _sampleRate) {
-                        _stalled = true;
-                        std::this_thread::sleep_for(std::chrono::milliseconds(_stallMs));
-                        }
-                  if (b.flush)
-                        _flushStart = w;
-                  for (unsigned i = 0; i < block; ++i) {
-                        const size_t at = size_t((w + i) % _capacity) * 2;
-                        _ring[at]     = _scratch[2 * i];
-                        _ring[at + 1] = _scratch[2 * i + 1];
-                        }
-                  Record& rec = _records[size_t(rw % RECORDS)];
-                  rec.start = w;
-                  rec.frames = block;
-                  rec.block = b;
-                  _write.store(w + block, std::memory_order_release);
-                  _recWrite.store(rw + 1, std::memory_order_release);
-                  _producerLead.store(b.lead, std::memory_order_release);
-                  if (sync) {
-                        {
-                              std::lock_guard<std::mutex> lock(_mutex);
-                              _doneSeq.store(req, std::memory_order_release);
-                        }
-                        _wakeCallback.notify_all();
-                        }
-                  continue;
                   }
             std::unique_lock<std::mutex> lock(_mutex);
             if (_quit.load(std::memory_order_relaxed))
                   break;
-            if (_reqSeq.load(std::memory_order_acquire) != _doneSeq.load(std::memory_order_relaxed) && room)
-                  continue;
-            _wakeProducer.wait_for(lock, std::chrono::milliseconds(2));
+            _wakeProducer.wait_for(lock, std::chrono::milliseconds(need ? 1 : 2));
             }
+      }
+
+//---------------------------------------------------------
+//   renderBlock
+//    one block of the callback's frames rendered into the ring with its record (the producer while leading, the
+//    callback while nothing leads), _renderMutex held. False when nothing was queued: no room, or the producer
+//    function held (*hold: waiting for the GUI, a loop's restart)
+//---------------------------------------------------------
+
+bool RenderAhead::renderBlock(bool producer, bool* hold)
+      {
+      const uint64_t w = _write.load(std::memory_order_relaxed);
+      const uint64_t r = _read.load(std::memory_order_acquire);
+      const uint64_t rw = _recWrite.load(std::memory_order_relaxed);
+      const uint64_t rr = _recRead.load(std::memory_order_acquire);
+      const unsigned block = blockFrames();
+      if (w + block - r > _capacity || rw + 1 - rr > RECORDS)
+            return false;
+      Block b = _produce(block, _scratch.data());
+      if (b.hold) {
+            if (hold)
+                  *hold = true;
+            return false;
+            }
+      if (producer && b.lead && _stallAt >= 0 && !_stalled && b.frame >= _stallAt * _sampleRate) {
+            _stalled = true;
+            std::this_thread::sleep_for(std::chrono::milliseconds(_stallMs));
+            }
+      if (b.flush)
+            _flushStart = w;
+      for (unsigned i = 0; i < block; ++i) {
+            const size_t at = size_t((w + i) % _capacity) * 2;
+            _ring[at]     = _scratch[2 * i];
+            _ring[at + 1] = _scratch[2 * i + 1];
+            }
+      Record& rec = _records[size_t(rw % RECORDS)];
+      rec.start = w;
+      rec.frames = block;
+      rec.block = b;
+      _write.store(w + block, std::memory_order_release);
+      _recWrite.store(rw + 1, std::memory_order_release);
+      _producerLead.store(b.lead, std::memory_order_release);
+      return true;
       }
 
 //---------------------------------------------------------
@@ -292,17 +292,23 @@ bool RenderAhead::process(unsigned frames, float* out, AudioCapture* capture)
                         break;
                         }
                   if (!asked) {
-                        // stopped (or the lead ended): this block is rendered now, as the callback would have
+                        // stopped (or the lead ended, or this play doesn't lead): this callback renders its block itself,
+                        // as the direct path does; never handed to the producer and waited for (a handoff per block
+                        // missed the budget whenever the producer woke late: the owner's chopped playback, 2026-11-23)
                         asked = true;
-                        const uint32_t req = _reqSeq.fetch_add(1, std::memory_order_acq_rel) + 1;
-                        _wakeProducer.notify_one();
-                        const auto budget = std::chrono::microseconds(int64_t(900000.0 * frames / std::max(1, _sampleRate)));
-                        std::unique_lock<std::mutex> lock(_mutex);
-                        _wakeCallback.wait_for(lock, budget, [&]() {
-                              return _quit.load(std::memory_order_relaxed)
-                                     || int32_t(_doneSeq.load(std::memory_order_acquire) - req) >= 0;
-                              });
-                        continue;
+                        bool rendered = false;
+                        {
+                              std::unique_lock<std::mutex> render(_renderMutex);
+                              if (_recWrite.load(std::memory_order_acquire) != rw)
+                                    rendered = true;        // (the producer queued one meanwhile)
+                              else if (!(_inLead && _producerLead.load(std::memory_order_acquire)))
+                                    rendered = renderBlock(false, nullptr);
+                        }
+                        if (rendered) {
+                              if (_producerLead.load(std::memory_order_acquire))
+                                    _wakeProducer.notify_one();     // (a lead began: the producer builds it)
+                              continue;
+                              }
                         }
                   if (_capturing)
                         underrun = true;
