@@ -254,10 +254,14 @@ bool Portaudio::init(bool)
       out.device           = idx;
       out.channelCount     = 2;
       out.sampleFormat     = paFloat32;
-      // the audio buffer: Preferences › I/O › Audio buffer in ms, 0 the device's low latency (as before). A
-      // larger buffer gives the hosted libraries (Kontakt + SSO) more time per block: no crackles, later response
+      // the audio buffer: Preferences › I/O › Audio buffer in ms. Default (0): the device's low latency, but never
+      // under DEFAULT_MIN_LATENCY_S: a device answering 1.8 ms (80 frames at 44.1 kHz) underflowed hundreds of times
+      // a play on the owner's PC, playback chopped into ~15 ms gaps while the export was clean (2026-11-23; 20 ms
+      // cured it). Playback is rendered ahead (render ahead), so a larger buffer costs nothing heard while playing;
+      // a clicked note answers within it. A larger buffer also gives the hosted libraries more time per block
+      static const double DEFAULT_MIN_LATENCY_S = 0.020;
       const int latencyMs = preferences.getInt(PREF_IO_PORTAUDIO_LATENCY);
-      out.suggestedLatency = latencyMs > 0 ? latencyMs / 1000.0 : di->defaultLowOutputLatency;
+      out.suggestedLatency = latencyMs > 0 ? latencyMs / 1000.0 : std::max(di->defaultLowOutputLatency, DEFAULT_MIN_LATENCY_S);
       out.hostApiSpecificStreamInfo = 0;
 
       err = Pa_OpenStream(&stream, 0, &out, double(_sampleRate), 0, 0, paCallback, (void*)this);
