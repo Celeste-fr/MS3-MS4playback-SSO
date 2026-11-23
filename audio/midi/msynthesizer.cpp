@@ -312,9 +312,24 @@ void MasterSynthesizer::setSampleRate(float val)
 
 //---------------------------------------------------------
 //   process
+//    n frames into p (interleaved stereo). A stretch longer than the effect buffers hold is rendered in pieces:
+//    it used to return without rendering anything, so a live audio device with blocks over 4096 frames (e.g. an
+//    ASIO buffer of 4800) played silence between events while the export (512-frame blocks) was fine. Up to 4096
+//    frames nothing changes (one piece, as before).
 //---------------------------------------------------------
 
 void MasterSynthesizer::process(unsigned n, float* p)
+      {
+      const unsigned piece = MAX_BUFFERSIZE / 2;
+      while (n > piece) {
+            processPiece(piece, p);
+            p += piece * 2;
+            n -= piece;
+            }
+      processPiece(n, p);
+      }
+
+void MasterSynthesizer::processPiece(unsigned n, float* p)
       {
       if (lock2)
             return;
@@ -323,9 +338,6 @@ void MasterSynthesizer::process(unsigned n, float* p)
             lock1 = false;
             return;
             }
-      // avoid overflow
-      if (n > MAX_BUFFERSIZE / 2)
-            return;
       for (Synthesizer* s : _synthesizer) {
             if (s->active() && !s->dry())
                   s->process(n, p, effect1Buffer, effect2Buffer);

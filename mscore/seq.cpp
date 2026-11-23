@@ -1581,6 +1581,7 @@ void Seq::process(unsigned framesPerPeriod, float* buffer)
       const int mode = _raMode.load(std::memory_order_acquire);
       if (mode == 1) {
             const bool underrun = _ra.process(framesPerPeriod, buffer, _capture);
+            guardOutput(framesPerPeriod, buffer, _ra.heardPlaying());
             countLate(framesPerPeriod, t0, underrun, _ra.heardPlaying());
             return;
             }
@@ -1590,9 +1591,56 @@ void Seq::process(unsigned framesPerPeriod, float* buffer)
             }
       processDirect(framesPerPeriod, buffer);
       const bool heard = state == Transport::PLAY;
+      guardOutput(framesPerPeriod, buffer, heard);
       if (_capture && heard)
             _capture->append(buffer, framesPerPeriod);
       countLate(framesPerPeriod, t0, false, heard);
+      }
+
+//---------------------------------------------------------
+//   guardOutput
+//    (the callback) the block about to go to the device: a sample that isn't a number (NaN / inf, which a driver's
+//    integer format turns into full-scale noise) becomes silence and is counted; samples at or over full scale and
+//    the block size are counted for the play's log line (the owner's live noise, 2026-11-23: export clean). A
+//    finite block is left exactly as it was
+//---------------------------------------------------------
+
+void Seq::guardOutput(unsigned frames, float* buffer, bool heard)
+      {
+      if (heard && !_late.heard) {        // (a play begins: its own counts; countLate resets _late after this)
+            _health.nonFinite = 0;
+            _health.fullScale = 0;
+            _health.maxFrames = 0;
+            _health.peak = 0.f;
+            }
+      unsigned bad = 0;
+      unsigned full = 0;
+      float peak = 0.f;
+      for (unsigned i = 0; i < frames * 2; ++i) {
+            const float v = buffer[i];
+            if (!std::isfinite(v)) {
+                  buffer[i] = 0.f;
+                  ++bad;
+                  continue;
+                  }
+            const float a = std::fabs(v);
+            if (a >= 1.f)
+                  ++full;
+            if (a > peak)
+                  peak = a;
+            }
+      if (!heard && bad == 0)
+            return;
+      if (bad)
+            _health.nonFinite.fetch_add(bad, std::memory_order_relaxed);
+      if (!heard)
+            return;
+      if (full)
+            _health.fullScale.fetch_add(full, std::memory_order_relaxed);
+      if (frames > _health.maxFrames.load(std::memory_order_relaxed))
+            _health.maxFrames.store(frames, std::memory_order_relaxed);
+      if (peak > _health.peak.load(std::memory_order_relaxed))
+            _health.peak.store(peak, std::memory_order_relaxed);
       }
 
 //---------------------------------------------------------
@@ -1653,12 +1701,22 @@ QString Seq::lateSummary() const
 
 void Seq::logLateAudio()
       {
-      if (_late.blocks.load() == 0)
-            return;
       std::shared_ptr<const SoundLib::Library> library = SoundLib::current();
-      if (library)
-            SoundLibraryHost::logLoadTime(*library, "Playback: " + lateSummary());
-      qDebug("Playback: %s", qPrintable(lateSummary()));
+      if (_late.blocks.load() != 0) {
+            if (library)
+                  SoundLibraryHost::logLoadTime(*library, "Playback: " + lateSummary());
+            qDebug("Playback: %s", qPrintable(lateSummary()));
+            }
+      // the audio's health this play (guardOutput): always one line, so a noisy play can be told apart
+      const float peak = _health.peak.load();
+      const QString health = QString("Playback audio: %1 Hz, largest block %2 frames, peak %3 dBFS, %4 sample(s) at or over "
+                                     "full scale, %5 sample(s) not a number (made silent)")
+                             .arg(MScore::sampleRate).arg(_health.maxFrames.load())
+                             .arg(peak > 0.f ? 20.0 * std::log10(peak) : -999.0, 0, 'f', 1)
+                             .arg(_health.fullScale.load()).arg(_health.nonFinite.load());
+      if (library && _health.maxFrames.load() > 0)
+            SoundLibraryHost::logLoadTime(*library, health);
+      qDebug("%s", qPrintable(health));
       }
 
 //---------------------------------------------------------

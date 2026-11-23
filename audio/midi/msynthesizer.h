@@ -83,6 +83,7 @@ class MasterSynthesizer : public QObject {
       void setSampleRate(float val);
 
       void process(unsigned, float*);
+      void processPiece(unsigned, float*);     // (process: at most MAX_BUFFERSIZE / 2 frames)
       void play(const NPlayEvent&, unsigned);
 
       void setMasterTuning(double val);

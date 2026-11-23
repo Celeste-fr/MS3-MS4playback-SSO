@@ -375,6 +375,16 @@ class Seq : public QObject, public Sequencer {
             double budgetMs { 0 };
             };
       LateAudio _late;
+      // the audio's health per play (guardOutput, in the callback; logged at the stop, logLateAudio): samples that
+      // weren't numbers (NaN / inf: replaced by silence), samples at or over full scale, the largest block
+      struct OutputHealth {
+            std::atomic<unsigned> nonFinite { 0 };
+            std::atomic<unsigned> fullScale { 0 };
+            std::atomic<unsigned> maxFrames { 0 };
+            std::atomic<float> peak { 0.f };
+            };
+      OutputHealth _health;
+      void guardOutput(unsigned frames, float* buffer, bool heard);
       std::atomic<bool> _deviceUnderflow { false };
       AudioCapture* _capture { nullptr };             // MS_PLAY_CAPTURE (playcapture.h)
       double _stallAt { -1 };                         // MS_AUDIO_STALL "<s>:<ms>" (a test: processDirect sleeps once)
