@@ -31,7 +31,7 @@ CI history): `docs/HISTORY.md`, read only when you need the background of a topi
 - **Readings of music go on a review page**: when work relies on an agent's reading of sheet music, a legend, a
   screenshot of a plug-in's key/articulation list or a contact sheet, publish a claude.ai artifact with each
   source picture (or crop) next to the reading and its use, before it changes code or the map. Symbols in
-  Bravura (subset `fonts/bravura/Bravura.otf` with `pyftsubset`, embedded); say what couldn't be read; open with
+  Bravura (subset `fonts/bravura/Bravura.otf` with `pyftsubset` or `python3 -m fontTools.subset`, embedded); say what couldn't be read; open with
   a "What to check" list. Example: https://claude.ai/artifact/CPfVu3qdHzMr5xPKiJFD2Y.
 - **Live 12.4 is the target** (the owner, 2026-10-02: first "make sure that we don't build any features that can't
   be run on 12.2", then "I updated my Ableton version across all devices to 12.4"): nothing may need a Live later
