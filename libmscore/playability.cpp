@@ -158,7 +158,7 @@ struct HarpPlan {
       bool changed[9] {};
       };
 
-enum class Family : char { NONE, HARP, TIMPANI, KEYBOARD, BRASS, ACCORDION };
+enum class Family : char { NONE, HARP, TIMPANI, KEYBOARD, BRASS, ACCORDION, GUITAR };
 
 // a brass part: its type, the trombone attachments and the valves it names (else the defaults)
 struct BrassPart {
@@ -168,6 +168,13 @@ struct BrassPart {
       };
 
 struct BrassEntryEvent;       // checkBrassEntries
+
+// a guitar tuning text at a tick: "6=D" strings, or a scordatura text (six names, or back to the String Data)
+struct GuitarTuningText {
+      int tick { 0 };
+      std::vector<std::pair<int, int>> strings;
+      ScordaturaText scord;
+      };
 
 class Pass {
       Score* _score;
@@ -229,6 +236,10 @@ class Pass {
       void checkAccordion(Part* part, const QString& staffName);
       void checkBellows(Part* part, const QString& staffName, const std::vector<PartMoment>& moments,
                         const std::map<int, bool>& bass, int dStep);
+      // guitar, G1-G8 (PLAYABILITY.md "Guitar")
+      std::map<Part*, std::vector<GuitarTuningText>> _guitarTexts;
+      StringInstrument guitarTuning(Part* part, int tick);
+      void checkGuitar(Part* part, const QString& staffName);
       // brass (diagrams-spec-brass.md)
       BrassPart brassPart(Part* part) const;
       std::vector<BrassEntry> noteEntries(const BrassPart& bp, const Note* n) const;
@@ -1046,6 +1057,9 @@ static Family familyOf(Part* part)
             return Family::TIMPANI;
       if (isAccordion(id, name))
             return Family::ACCORDION;       // before the keyboards: a part named for one is an accordion
+      // a guitar: the id, else the name; the part's own names may also rule it out (a part renamed "Bass Guitar")
+      if (isGuitar(id, name + " | " + plainText(part->longName()) + " | " + plainText(part->partName())))
+            return Family::GUITAR;
       if (isKeyboard(id, name) && part->nstaves() >= 2)
             return Family::KEYBOARD;
       if (brassType(id, name) != Brass::NONE)
@@ -4253,6 +4267,261 @@ void Pass::checkBellows(Part* part, const QString& staffName, const std::vector<
       }
 
 //---------------------------------------------------------
+//   Guitar, G1-G8 (PLAYABILITY.md "Guitar"; limits and sources in playabilityrules.h)
+//    The tuning in force: the instrument's String Data (MuseScore keeps it at written pitch: + the transposition is
+//    the sound), else the standard tuning; then the part's tuning texts in order: "6=D" / "⑥=D" retunes those
+//    strings (from the tuning in force), a scordatura text naming six strings retunes all of them, and "normal
+//    tuning" / "accord." / "scord. off" go back to the String Data (scordaturaText). A String Data of other than
+//    six strings: not a six-string guitar, not checked.
+//    Per moment (partMoments: every staff and voice of the part, a chord's grace notes before or after it): the
+//    notes struck, and the notes held from before (tied, or still sounding by their written value), each of which
+//    keeps its string. The same pitch in two voices is one note (one string; a held note struck again in another
+//    voice is struck again on its string). Harmonics (a diamond head, a harmonic circle: as for the bowed strings)
+//    are G7 / G8's and are left out of G2-G6 (their strings are not checked against the other notes).
+//---------------------------------------------------------
+
+StringInstrument Pass::guitarTuning(Part* part, int tick)
+      {
+      auto found = _guitarTexts.find(part);
+      if (found == _guitarTexts.end()) {
+            std::vector<GuitarTuningText>& list = _guitarTexts[part];
+            for (Segment* s = _score->firstSegment(SegmentType::ChordRest); s; s = s->next1(SegmentType::ChordRest))
+                  for (Element* e : s->annotations()) {
+                        if (!e->isTextBase() || e->track() < part->startTrack() || e->track() >= part->endTrack())
+                              continue;
+                        const QString text = plainText(toTextBase(e)->xmlText());
+                        GuitarTuningText t;
+                        t.tick = s->tick().ticks();
+                        if (guitarStringText(text, &t.strings))
+                              list.push_back(t);
+                        else if (scordaturaText(text, &t.scord))
+                              list.push_back(t);
+                        }
+            std::stable_sort(list.begin(), list.end(), [](const GuitarTuningText& a, const GuitarTuningText& b) { return a.tick < b.tick; });
+            found = _guitarTexts.find(part);
+            }
+      const Instrument* ins = part->instrument(Fraction::fromTicks(tick));
+      StringInstrument base = guitarInstrument();
+      const QList<instrString>& data = ins->stringData()->stringList();
+      if (!data.isEmpty()) {
+            if (data.size() != GUITAR_STRINGS)
+                  return StringInstrument();          // not a six-string guitar
+            std::vector<int> lowToHigh;
+            for (const instrString& s : data)
+                  lowToHigh.push_back(s.pitch + ins->transpose().chromatic);
+            base = withStrings(base, lowToHigh);
+            }
+      StringInstrument in = base;
+      for (const GuitarTuningText& t : found->second) {
+            if (t.tick > tick)
+                  break;
+            if (!t.strings.empty())
+                  in = retuneGuitarStrings(in, t.strings);
+            else if (t.scord.reset)
+                  in = base;
+            else if (t.scord.strings.size() == in.strings.size())
+                  in = retune(base, t.scord);
+            }
+      return in;
+      }
+
+// a chord's harmonic notation, as the bowed strings read it (handle): diamond heads, harmonic circles
+static std::vector<HarmonicNote> harmonicNotes(const Chord* chord, bool* any)
+      {
+      std::vector<HarmonicNote> hl;
+      bool chordCircle = false;
+      for (const Articulation* a : chord->articulations())
+            if (isHarmonicCircle(a->symId()))
+                  chordCircle = true;
+      *any = chordCircle;
+      for (Note* n : chord->notes()) {
+            if (!n->visible())
+                  continue;
+            bool d = n->headGroup() == NoteHead::Group::HEAD_DIAMOND;
+            bool c = chordCircle;
+            for (const Element* e : n->el())
+                  if (e->isSymbol() && isHarmonicCircle(toSymbol(e)->sym()))
+                        c = true;
+            *any |= d || c;
+            hl.push_back({ n->ppitch(), d, c });
+            }
+      return hl;
+      }
+
+// "D A D G B E": the tuning's strings low to high
+static QString guitarTuningName(const StringInstrument& in)
+      {
+      QStringList names;
+      for (int i = int(in.strings.size()) - 1; i >= 0; --i)
+            names << stringName(in, i);
+      return names.join(" ");
+      }
+
+void Pass::checkGuitar(Part* part, const QString& staffName)
+      {
+      struct Held { int pitch; int end; bool harmonic; };
+      std::vector<Held> held;
+      std::vector<PartMoment> moments = partMoments(part);
+      for (const PartMoment& m : moments) {
+            held.erase(std::remove_if(held.begin(), held.end(), [&](const Held& h) { return h.end <= m.tick; }), held.end());
+            const StringInstrument in = guitarTuning(part, m.tick);
+            std::vector<const PartNote*> struck;
+            for (const PartNote& pn : m.notes)
+                  if (pn.attack)
+                        struck.push_back(&pn);
+            if (!in.valid() || struck.empty())
+                  continue;
+            const int lowest = *std::min_element(in.strings.begin(), in.strings.end());
+            const QString spell = guitarTuningName(in);
+
+            // harmonics, per chord (G7)
+            std::set<const Note*> harmonic;
+            std::set<const Chord*> chords;
+            for (const PartNote* pn : struck)
+                  chords.insert(pn->chord);
+            for (const Chord* c : chords) {
+                  bool any = false;
+                  std::vector<HarmonicNote> hl = harmonicNotes(c, &any);
+                  if (!any)
+                        continue;
+                  std::vector<SpelledNote> spelled;
+                  for (const Note* n : c->notes())
+                        spelled.push_back({ n->ppitch(), n->tpc1(), 0.0 });
+                  Spelling sp(spelled, int(c->staff()->key(c->tick())));
+                  HarmonicResult h = classifyHarmonic(in, hl, sp);
+                  if (!h.harmonic)
+                        continue;                 // a circle that is the open-string sign
+                  std::vector<const PartNote*> on;
+                  for (const PartNote* pn : struck)
+                        if (pn->chord == c) {
+                              harmonic.insert(pn->note);
+                              on.push_back(pn);
+                              }
+                  if (h.verdict == HarmonicVerdict::OK)
+                        continue;
+                  const bool artificialPair = h.detail.startsWith("stop ");
+                  momentRow(m, on, staffName, "guitarHarmonic", false,
+                            h.reason + (artificialPair ? QString() : QString(" (tuning %1; natural harmonics: partials 2-5, Sevsay p. 225, "
+                                                                             "Blatter p. 283; 6 and 8 on Blatter's chart, p. 446)").arg(spell)));
+                  }
+
+            // G1: more notes struck than strings
+            std::set<int> struckPitches;
+            for (const PartNote* pn : struck)
+                  struckPitches.insert(pn->note->ppitch());
+            if (int(struckPitches.size()) > GUITAR_STRINGS) {
+                  momentRow(m, struck, staffName, "guitarNotes", true,
+                            QString("%1 notes struck at once: a six-string guitar plays one note per string, six at most "
+                                    "(Blatter pp. 278, 445; Sevsay pp. 224-225; Adler p. 102)").arg(struckPitches.size()));
+                  }
+            // G3 below the lowest string, G4 above the 19th fret
+            std::vector<const PartNote*> below, above, ordinary;
+            for (const PartNote* pn : struck) {
+                  if (harmonic.count(pn->note))
+                        continue;
+                  const int p = pn->note->ppitch();
+                  if (p < lowest)
+                        below.push_back(pn);
+                  else {
+                        ordinary.push_back(pn);
+                        if (p > GUITAR_TOP)
+                              above.push_back(pn);
+                        }
+                  }
+            momentRow(m, below, staffName, "guitarLow", true,
+                      QString("below the lowest string, %1, of the tuning in force (%2): no string has this note; a retuned "
+                              "string (scordatura, Sevsay p. 225: a staff text such as \"6=D\" or the part's String Data) "
+                              "would").arg(plainName(lowest), spell));
+            momentRow(m, above, staffName, "guitarHigh", false,
+                      QString("above B5 (written B6), the 19th fret of string I (Blatter pp. 278, 282; Sevsay p. 224: written "
+                              "b''' or c''''): some guitars reach C or a little higher (Blatter p. 282)"));
+
+            if (int(struckPitches.size()) <= GUITAR_STRINGS && !ordinary.empty()) {
+                  // G2, G5, G6 on everything sounding: the notes struck and the notes held from before
+                  std::set<int> sounding;
+                  for (const PartNote* pn : ordinary)
+                        sounding.insert(pn->note->ppitch());
+                  int heldCount = 0;
+                  QStringList heldNames;
+                  for (const Held& h : held)
+                        if (!h.harmonic && h.pitch >= lowest && sounding.insert(h.pitch).second) {
+                              ++heldCount;
+                              heldNames << plainName(h.pitch);
+                              }
+                  if (sounding.size() >= 2) {
+                        const QString withHeld = heldCount ? QString(" (with %1 held)").arg(heldNames.join(" + ")) : QString();
+                        std::vector<int> pitches(sounding.begin(), sounding.end());
+                        GuitarFit fit = fitGuitar(in, pitches);
+                        if (!fit.assignable) {
+                              momentRow(m, ordinary, staffName, "guitarStrings", true,
+                                        QString("these notes%1 cannot each have a string of their own in the tuning in force (%2, "
+                                                "frets 0-%3): one note per string (Blatter pp. 278, 445; Sevsay p. 224)")
+                                        .arg(withHeld, spell).arg(GUITAR_MAX_FRET));
+                              }
+                        else {
+                              if (fit.excess > 1e-9)
+                                    momentRow(m, ordinary, staffName, "guitarSpan", false,
+                                              QString("stopped notes%1 %2 frets apart at best (frets %3-%4): from fret %3 the hand "
+                                                      "covers %5, the length of a position with one extension, fret 1 to 5 in "
+                                                      "position I (Blatter p. 445)")
+                                              .arg(withHeld).arg(fit.highFret - fit.lowFret).arg(fit.lowFret).arg(fit.highFret)
+                                              .arg(fmtReach(fit.allowed)));
+                              if (fit.fingers > GUITAR_FINGERS)
+                                    momentRow(m, ordinary, staffName, "guitarFingers", false,
+                                              QString("%1 left-hand fingers needed at best%2 (the index barring the lowest fret): the "
+                                                      "left hand stops with four (Sevsay p. 225; Blatter pp. 285, 445)")
+                                              .arg(fit.fingers).arg(withHeld));
+                              }
+                        }
+                  }
+            for (const PartNote* pn : struck)
+                  if (pn->end > m.tick)
+                        held.push_back({ pn->note->ppitch(), pn->end, harmonic.count(pn->note) > 0 });
+            }
+
+      // G8: artificial harmonics (a stopped note and a diamond above it) one after another in a voice, closer than
+      // eighths at quarter = 90 (Blatter p. 283)
+      for (int track = part->startTrack(); track < part->endTrack(); ++track) {
+            const Chord* prev = nullptr;
+            bool prevArtificial = false;
+            for (Segment* s = _score->firstSegment(SegmentType::ChordRest); s; s = s->next1(SegmentType::ChordRest)) {
+                  Element* e = s->element(track);
+                  if (!e || !e->isChord())
+                        continue;
+                  Chord* c = toChord(e);
+                  bool any = false;
+                  std::vector<HarmonicNote> hl = harmonicNotes(c, &any);
+                  bool artificial = false;
+                  if (any && hl.size() == 2 && hl[0].diamond != hl[1].diamond) {
+                        const HarmonicNote& d = hl[0].diamond ? hl[0] : hl[1];
+                        const HarmonicNote& p = hl[0].diamond ? hl[1] : hl[0];
+                        artificial = d.pitch > p.pitch;
+                        }
+                  if (artificial && prevArtificial && prev) {
+                        const double secs = secondsBetween(prev->tick().ticks(), c->tick().ticks());
+                        if (secs < GUITAR_ARTIFICIAL_SECONDS - 1e-6) {
+                              std::vector<Note*> ns(c->notes().begin(), c->notes().end());
+                              std::stable_sort(ns.begin(), ns.end(), [](const Note* a, const Note* b) { return a->ppitch() < b->ppitch(); });
+                              QStringList names;
+                              for (Note* n : ns) {
+                                    warnNote(n, "guitarHarmonicSpeed");
+                                    names << tpcName(n->tpc1(), n->ppitch());
+                                    }
+                              addRow(c->tick().ticks(), c->tick().ticks(), track, staffName, "guitarHarmonicSpeed", "risky",
+                                     QString("artificial harmonics %1 apart: faster than moving eighths at quarter = about 90, "
+                                             "%2, the fastest Blatter p. 283 gives")
+                                     .arg(QString::number(secs, 'f', 2) + " s", QString::number(GUITAR_ARTIFICIAL_SECONDS, 'f', 2) + " s"),
+                                     names.join(" + "));
+                              countLast();
+                              }
+                        }
+                  prev = c;
+                  prevArtificial = artificial;
+                  }
+            }
+      }
+
+//---------------------------------------------------------
 //   inspectFamily: a harp's pedals, the timpani's drums, a keyboard hand at the chord
 //---------------------------------------------------------
 
@@ -4281,6 +4550,28 @@ ChordInfo Pass::inspectFamily(Chord* chord, Family f)
       info.text = names.join(" + ");
       if (f == Family::ACCORDION)
             return info;                // the notes only: no keyboard strip (the left hand is buttons)
+      if (f == Family::GUITAR) {
+            // the strings and frets of the chord's notes, the assignment with the narrowest hand (G5)
+            const StringInstrument in = guitarTuning(part, tick);
+            std::set<int> ps;
+            for (const Note* n : chord->notes())
+                  ps.insert(n->ppitch());
+            std::vector<int> pitches(ps.begin(), ps.end());
+            GuitarFit fit = in.valid() ? fitGuitar(in, pitches) : GuitarFit();
+            if (fit.assignable) {
+                  QStringList where;
+                  for (size_t i = 0; i < pitches.size(); ++i) {
+                        const int s = fit.spanAssign[i];
+                        const int fret = pitches[i] - in.strings[s];
+                        where << plainName(pitches[i]) + QString(" (%1, %2)").arg(roman(s))
+                                                                    .arg(fret ? QString("fret %1").arg(fret) : QString("open"));
+                        }
+                  info.text += "\n" + where.join(" + ");
+                  }
+            if (!in.tuning.isEmpty())
+                  info.text += "\nTuning: " + in.tuning;
+            return info;
+            }
 
       if (f == Family::HARP) {
             std::vector<HarpPlan> plans = checkHarp(part, staffName);
@@ -4696,6 +4987,8 @@ void Pass::run()
                   checkBrass(part, staffName);
             else if (f == Family::ACCORDION)
                   checkAccordion(part, staffName);
+            else if (f == Family::GUITAR)
+                  checkGuitar(part, staffName);
             else
                   checkKeyboard(part, staffName);
             }

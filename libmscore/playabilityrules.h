@@ -57,6 +57,7 @@ struct StringInstrument {
       double crossMax { 0 };
       bool requireOpenString { false };
       bool section { false };
+      bool fretted { false };       // a guitar (G1-G8): its own harmonic tables; the bowed checks never see it
       bool valid() const { return !strings.empty(); }
       };
 
@@ -480,6 +481,74 @@ enum class StradellaChord : char { NONE, MAJOR, MINOR, DOMINANT7, DIMINISHED7 };
 StradellaChord stradellaChord(int pitchClassMask);
 
 //---------------------------------------------------------
+//   Guitar, G1-G8 (owner-approved 2026-11-23; PLAYABILITY.md "Guitar"). The six-string classical / acoustic
+//   guitar, at SOUNDING pitch (MuseScore keeps the sound; the guitar is written an octave higher: Blatter p. 279
+//   Ex. 6.18, Sevsay p. 224, Adler p. 102). Red only for what no guitar in the tuning in force can play: more
+//   notes than strings (G1), notes that cannot each have a string (G2), a note below the lowest string (G3).
+//   Everything else is dark yellow. Sources are cited by page only.
+//   A guitar is a StringInstrument with fretted set (strings string I first; the String Data or a scordatura
+//   text retunes it as for the bowed strings), but it is never one of the bowed strings: lookup() does not know
+//   it, so no bowing, divisi, stop or tremolo check reads it (the guitar pass, Pass::checkGuitar, is its own).
+//---------------------------------------------------------
+
+constexpr int GUITAR_STRINGS = 6;                   // Blatter pp. 278, 445; Sevsay p. 224; Adler p. 102
+// G2: a note may be stopped up to fret 24 (Blatter p. 283, footnote: some guitars have 24 frets, not all; the
+// usual 19 frets, Blatter pp. 278, 445, only for G4): red only when no 24-fret guitar has a string for every note
+constexpr int GUITAR_MAX_FRET = 24;
+constexpr int GUITAR_FRETS = 19;
+// G4: above sounding B5 (written B6): string I (E4) + 19 frets (Blatter p. 278, 19 frets; p. 282, the top "high
+// B", some guitars reach C or a little above; Sevsay p. 224, written b''' or c''''). Dark yellow, never red
+constexpr int GUITAR_TOP = 83;
+// G5 hand frame: Blatter p. 445's position with one extension. In position I (the index ready at fret 1) the
+// hand covers frets 1-4 and the little finger's extension reaches fret 5: the reference is the LENGTH along the
+// string from fret 1 to fret 5. Frets follow the 12-TET geometry, so the same length covers more frets higher up
+// (spanAt, the violin's hand frame; the string length cancels). Both extensions at once (not possible together,
+// Blatter p. 445) would be fret 1 to 6: kept as a constant, not used for red (the owner may want it later)
+constexpr double GUITAR_SPAN_POS = 1;               // fret 1
+constexpr double GUITAR_SPAN_FRETS = 4;             // to fret 5
+constexpr double GUITAR_BOTH_EXT_FRETS = 5;         // to fret 6: both extensions (not used)
+// G6: four left-hand fingers (Sevsay p. 225; Blatter p. 445; Adler p. 102); the index may barre (Blatter p. 285;
+// Sevsay p. 225: up to six tones with four fingers)
+constexpr int GUITAR_FINGERS = 4;
+// G8: the fastest artificial harmonics, moving eighths at quarter = about 90 (Blatter p. 283): 1/3 s apart
+constexpr double GUITAR_ARTIFICIAL_BPM = 90;
+constexpr double GUITAR_ARTIFICIAL_SECONDS = 60.0 / GUITAR_ARTIFICIAL_BPM / 2;
+
+// a six-string classical or acoustic guitar: MusicXML id pluck.guitar.nylon-string or pluck.guitar.acoustic,
+// pluck.guitar or no id with a guitar name (guitar, guitare, Gitarre, chitarra, guitarra; plurals too). Not the
+// bass guitar, 12-string, high-G (Nashville) tuning, electric, pedal steel, 7- / 11-string, soprano, alto,
+// baritone, contra or terz guitars (out of scope: PLAYABILITY.md "Guitar")
+bool isGuitar(const QString& instrumentId, const QString& name);
+// the standard guitar, E4 B3 G3 D3 A2 E2 sounding, string I first (Blatter p. 279 Ex. 6.18; Sevsay p. 224)
+StringInstrument guitarInstrument();
+// a guitar tuning text: "6=D", "⑥=D", "(6) = D", several in one text ("6=D 5=G"); out: string number 1-6 and
+// the pitch class. False when the text has none
+bool guitarStringText(const QString& text, std::vector<std::pair<int, int>>* out);
+// those strings retuned, each to the pitch class nearest the string it replaces (as retune)
+StringInstrument retuneGuitarStrings(const StringInstrument& in, const std::vector<std::pair<int, int>>& changes);
+// G5: how many frets the hand covers from fret `pos` (its lowest stopped fret): the length from fret
+// GUITAR_SPAN_POS to GUITAR_SPAN_POS + refFrets, moved along the neck (spanAt)
+double guitarSpanAt(double pos, double refFrets = GUITAR_SPAN_FRETS);
+
+struct GuitarFit {
+      bool assignable { false };    // G2: every note a string of its own, frets 0-GUITAR_MAX_FRET
+      std::vector<int> spanAssign;  // the assignment with the smallest G5 excess
+      int lowFret { 0 }, highFret { 0 };      // its stopped notes' lowest and highest frets
+      double allowed { 0 };         // guitarSpanAt(lowFret)
+      double excess { -1 };         // (highFret - lowFret) - allowed, the smallest over every assignment; <= 0: fits
+      std::vector<int> fingerAssign;// the assignment needing the fewest fingers
+      int fingers { 0 };            // G6: the fewest over every assignment
+      };
+// pitches: the notes sounding together (semitones, any order). Tries every assignment of distinct strings (at
+// most 6! = 720); open strings are free for G5 and G6
+GuitarFit fitGuitar(const StringInstrument& in, const std::vector<int>& pitches);
+// G6: fingers for one assignment (derived): a finger lies along one fret over a run of neighbouring strings, broken by a
+// string played open or stopped lower in between; the index barres any run at the lowest fret (Blatter p. 285: the
+// grande barre over the upper five, lower five or all six strings), any other finger three strings or fewer (Blatter
+// p. 285: a half barre by one finger over three or fewer strings); one finger per such group
+int guitarFingers(const StringInstrument& in, const std::vector<int>& pitches, const std::vector<int>& assign);
+
+//---------------------------------------------------------
 //   B4-B6 trombone slide, valve brass fingerings: the owner's approved spec (diagrams-spec-brass.md,
 //   2026-10-08). The lists come from Blatter's charts (playabilitybrass.h, generated): trombone
 //   pp. 469-470, valved brass pp. 463-468, horn pp. 461-462; where a chart covers a note its entries
@@ -726,6 +795,10 @@ constexpr const char* NOTATION_KINDS[] = {
       "ledger", "clef", "divisi", "firstDynamic", "technique", "accidental", "clarinetKey",
       "stringName", "harmonicString", "harmonicLine", "vocal", "tempo", "slurRepeat",
       "accordionNotation" };
+// the guitar's row kinds (G1-G8), in order
+constexpr const char* GUITAR_KINDS[] = {
+      "guitarNotes", "guitarStrings", "guitarLow", "guitarHigh", "guitarSpan", "guitarFingers", "guitarHarmonic",
+      "guitarHarmonicSpeed" };
 
 }     // namespace Playability
 }     // namespace Ms

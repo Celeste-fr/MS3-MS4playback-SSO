@@ -14,6 +14,7 @@
 #include <algorithm>
 #include <cmath>
 #include <functional>
+#include <set>
 #include <tuple>
 #include <QRegularExpression>
 #include <QStringList>
@@ -502,6 +503,18 @@ static const std::map<int, int> SOUNDS = { { 2, 12 }, { 3, 19 }, { 4, 24 }, { 5,
 static const int SOLO_ONLY = 9;
 static const std::map<int, const char*> TOUCH_NAME = { { 3, "m3" }, { 4, "M3" }, { 5, "P4" }, { 7, "5th" } };
 static bool riskyTouch(int iv) { return iv == 3 || iv == 4 || iv == 7; }
+// The guitar's tables (G7). Natural harmonics touched at fret 12 (partial 2), 7 or 19 (3), 5 or 24 (4), 4, 9 or 16
+// (5) (Blatter p. 283; Sevsay p. 225: partials 2-5); partials 6 and 8 appear only on Blatter's chart (p. 446, their
+// nodes at frets 3 and 2), their other nodes derived: node k/n lies -12 log2(1 - k/n) frets from the nut, rounded
+// (the same rule gives Blatter's table for partials 2-5 exactly); nodes beyond fret 24 are left out (Blatter names
+// none). Artificial: the touch 12, 5, 4 or 3 frets above the stop (Blatter p. 283)
+static const std::map<int, int> GUITAR_NODES = { { 2, 8 }, { 3, 6 }, { 4, 5 }, { 5, 4 }, { 7, 3 }, { 8, 8 }, { 9, 5 },
+                                                 { 12, 2 }, { 16, 5 }, { 17, 8 }, { 19, 3 }, { 24, 4 } };
+static const std::map<int, int> GUITAR_SOUNDS = { { 2, 12 }, { 3, 19 }, { 4, 24 }, { 5, 28 }, { 6, 31 }, { 8, 36 } };
+static const std::map<int, int> GUITAR_TOUCH = { { 3, 6 }, { 4, 5 }, { 5, 4 }, { 12, 2 } };
+static const std::map<int, int>& nodesOf(const StringInstrument& in) { return in.fretted ? GUITAR_NODES : NODES; }
+static const std::map<int, int>& soundsOf(const StringInstrument& in) { return in.fretted ? GUITAR_SOUNDS : SOUNDS; }
+static int soloOnlyOf(const StringInstrument& in) { return in.fretted ? -1 : SOLO_ONLY; }
 // highest practical STOPPED note for an artificial harmonic (p. 47, Ex 2-76)
 static int highestStop(const QString& name)
       {
@@ -536,11 +549,11 @@ static HarmOne naturalAtNode(const StringInstrument& in, int touched)
       HarmInfo found, solo;
       for (size_t i = 0; i < in.strings.size(); ++i) {
             int off = touched - in.strings[i];
-            int partial = lookupMap(NODES, off);
+            int partial = lookupMap(nodesOf(in), off);
             if (!partial)
                   continue;
-            HarmInfo cand { true, int(i), partial, in.strings[i] + lookupMap(SOUNDS, partial) };
-            if (off == SOLO_ONLY) {
+            HarmInfo cand { true, int(i), partial, in.strings[i] + lookupMap(soundsOf(in), partial) };
+            if (off == soloOnlyOf(in)) {
                   if (!solo.valid)
                         solo = cand;
                   }
@@ -558,7 +571,7 @@ static HarmOne naturalAtNode(const StringInstrument& in, int touched)
 static HarmOne naturalAtSounding(const StringInstrument& in, int sounding)
       {
       for (size_t i = 0; i < in.strings.size(); ++i)
-            for (const auto& p : SOUNDS)
+            for (const auto& p : soundsOf(in))
                   if (in.strings[i] + p.second == sounding)
                         return { HarmonicVerdict::OK, HarmInfo { true, int(i), p.first, sounding }, QString() };
       return { HarmonicVerdict::IMPOSSIBLE, HarmInfo(), "no natural harmonic sounds this pitch" };
@@ -568,6 +581,14 @@ static HarmOne naturalAtSounding(const StringInstrument& in, int sounding)
 static HarmOne artificial(const StringInstrument& in, int stopped, int touched, const Spelling& sp)
       {
       int iv = touched - stopped;
+      if (in.fretted) {
+            int gp = lookupMap(GUITAR_TOUCH, iv);
+            if (!gp)
+                  return { HarmonicVerdict::IMPOSSIBLE, HarmInfo(),
+                           QString("touch %1 frets above the stop is not one of the guitar's artificial harmonics "
+                                   "(12, 5, 4 or 3 frets, Blatter p. 283)").arg(iv) };
+            return { HarmonicVerdict::OK, HarmInfo { true, -1, gp, stopped + lookupMap(GUITAR_SOUNDS, gp) }, QString() };
+            }
       int partial = lookupMap(NODES, iv);
       auto tn = TOUCH_NAME.find(iv);
       if (tn == TOUCH_NAME.end() || !partial)
@@ -675,21 +696,21 @@ std::vector<HarmonicOption> naturalOptions(const StringInstrument& in, int pitch
       for (size_t i = 0; i < in.strings.size(); ++i) {
             int open = in.strings[i];
             if (atNode) {
-                  int p = lookupMap(NODES, pitch - open);
+                  int p = lookupMap(nodesOf(in), pitch - open);
                   if (p) {
-                        bool solo = pitch - open == SOLO_ONLY;
-                        out.push_back({ int(i), p, open + lookupMap(SOUNDS, p), solo, { { pitch, place(p, pitch - open), p, solo } } });
+                        bool solo = pitch - open == soloOnlyOf(in);
+                        out.push_back({ int(i), p, open + lookupMap(soundsOf(in), p), solo, { { pitch, place(p, pitch - open), p, solo } } });
                         }
                   continue;
                   }
-            for (const auto& q : SOUNDS) {
+            for (const auto& q : soundsOf(in)) {
                   if (open + q.second != pitch)
                         continue;
                   HarmonicOption o { int(i), q.first, pitch, true, {} };
-                  for (const auto& n : NODES)
+                  for (const auto& n : nodesOf(in))
                         if (n.second == q.first) {
-                              o.nodes.push_back({ open + n.first, place(q.first, n.first), q.first, n.first == SOLO_ONLY });
-                              if (n.first != SOLO_ONLY)
+                              o.nodes.push_back({ open + n.first, place(q.first, n.first), q.first, n.first == soloOnlyOf(in) });
+                              if (n.first != soloOnlyOf(in))
                                     o.solo = false;
                               }
                   std::sort(o.nodes.begin(), o.nodes.end(), [](const HarmonicNode& a, const HarmonicNode& b) { return a.pitch < b.pitch; });
@@ -706,7 +727,7 @@ static QString describeOptions(const StringInstrument& in, const std::vector<Har
       for (const HarmonicOption& o : opts) {
             QStringList names;
             for (const HarmonicNode& n : o.nodes)
-                  names << sp.name(n.pitch) + (n.pitch - in.strings[o.string] == SOLO_ONLY && o.nodes.size() > 1 ? " (solo only)" : "");
+                  names << sp.name(n.pitch) + (n.pitch - in.strings[o.string] == soloOnlyOf(in) && o.nodes.size() > 1 ? " (solo only)" : "");
             parts << stringName(in, o.string) + QString(" string (%1): node ").arg(roman(o.string)) + names.join(" or ")
                      + ", sounds " + sp.name(o.sounds) + (o.solo ? " (solo only)" : "");
             }
@@ -1826,6 +1847,212 @@ int slideGlissando(Brass b, int attachments, int from, int to, QString* reason)
             }
       *reason = "no partial holds both notes of the slide glissando";
       return 2;
+      }
+
+
+//---------------------------------------------------------
+//   Guitar, G1-G8 (PLAYABILITY.md "Guitar")
+//---------------------------------------------------------
+
+bool isGuitar(const QString& id, const QString& name)
+      {
+      static const QRegularExpression NAME(QString::fromUtf8("guitar|guitare|gitarr|chitarr"), QRegularExpression::CaseInsensitiveOption);
+      static const QRegularExpression EXCLUDED(QString::fromUtf8(
+            "bass|bajo|basse|\\b12\\b|12[\\s-]*(string|saiter|corde)|twelve|zwölf|dodici|high[\\s-]*g\\b|nashville|high[\\s-]*strung"
+            "|electric|elektr|électr|e-gitarre|steel\\s+guitar|pedal|\\b7[\\s-]*(string|saiter)|\\b11[\\s-]*(string|saiter)"
+            "|soprano|\\balto\\b|bariton|contra|kontra|\\bterz|requinto|cavaquinho|ukulele"),
+            QRegularExpression::CaseInsensitiveOption | QRegularExpression::UseUnicodePropertiesOption);
+      if (EXCLUDED.match(name).hasMatch())
+            return false;
+      if (id == "pluck.guitar.nylon-string" || id == "pluck.guitar.acoustic")
+            return true;
+      if (id.isEmpty() || id == "pluck.guitar")
+            return NAME.match(name).hasMatch();
+      return false;
+      }
+
+StringInstrument guitarInstrument()
+      {
+      StringInstrument in;
+      in.name = "Guitar";
+      in.strings = { 64, 59, 55, 50, 45, 40 };
+      in.fretted = true;
+      return in;
+      }
+
+bool guitarStringText(const QString& text, std::vector<std::pair<int, int>>* out)
+      {
+      // "6=D", "(6) = D", "⑥=D" (the circled digits ① to ⑥, U+2460-2465)
+      static const QRegularExpression PAIR(QString::fromUtf8("(?:\\(([1-6])\\)|(?<![\\d.])([1-6])|([①-⑥]))\\s*=\\s*"
+                                                             "([A-G])(bb|𝄫|♭♭|b|♭|##|x|𝄪|♯♯|#|♯)?(?![A-Za-z])"));
+      static const int LETTER_PC[7] = { 9, 11, 0, 2, 4, 5, 7 };     // A B C D E F G
+      std::vector<std::pair<int, int>> got;
+      auto it = PAIR.globalMatch(text);
+      while (it.hasNext()) {
+            QRegularExpressionMatch m = it.next();
+            int string = !m.captured(1).isEmpty() ? m.captured(1).toInt()
+                         : !m.captured(2).isEmpty() ? m.captured(2).toInt()
+                         : m.captured(3).at(0).unicode() - 0x2460 + 1;
+            QString acc = m.captured(5);
+            int alter = 0;
+            if (acc == "b" || acc == QString::fromUtf8("♭"))
+                  alter = -1;
+            else if (acc == "bb" || acc == QString::fromUtf8("𝄫") || acc == QString::fromUtf8("♭♭"))
+                  alter = -2;
+            else if (acc == "#" || acc == QString::fromUtf8("♯"))
+                  alter = 1;
+            else if (!acc.isEmpty())
+                  alter = 2;
+            got.push_back({ string, ((LETTER_PC[m.captured(4).at(0).unicode() - 'A'] + alter) % 12 + 12) % 12 });
+            }
+      if (got.empty())
+            return false;
+      if (out)
+            *out = got;
+      return true;
+      }
+
+StringInstrument retuneGuitarStrings(const StringInstrument& in, const std::vector<std::pair<int, int>>& changes)
+      {
+      StringInstrument out = in;
+      for (const auto& c : changes) {
+            int idx = c.first - 1;                // string 1 = string I, index 0
+            if (idx < 0 || idx >= int(out.strings.size()))
+                  continue;
+            int old = out.strings[idx];
+            int p = old - pc(old) + c.second;     // the same pitch class nearest the old string
+            if (p - old > 6)
+                  p -= 12;
+            else if (old - p > 6)
+                  p += 12;
+            out.strings[idx] = p;
+            }
+      out.stringNames.clear();
+      QStringList names;
+      for (int i = int(out.strings.size()) - 1; i >= 0; --i)
+            names << stringName(out.strings[i]);
+      out.tuning = out.strings == guitarInstrument().strings ? QString() : names.join(" ");
+      return out;
+      }
+
+double guitarSpanAt(double pos, double refFrets)
+      {
+      // the length from fret P to fret P + refFrets is the length from the nut to L0 semitones: x(n) = L(1 - 2^(-n/12))
+      const double P = GUITAR_SPAN_POS;
+      const double l0 = -12 * std::log2(1 - std::pow(2.0, -P / 12) + std::pow(2.0, -(P + refFrets) / 12));
+      return spanAt(l0, pos);
+      }
+
+int guitarFingers(const StringInstrument& in, const std::vector<int>& pitches, const std::vector<int>& assign)
+      {
+      const int n = int(in.strings.size());
+      std::vector<int> fret(n, -1);         // per string (string order: neighbours are neighbours): -1 not played, 0 open
+      for (size_t i = 0; i < pitches.size(); ++i)
+            fret[assign[i]] = pitches[i] - in.strings[assign[i]];
+      std::set<int> frets;
+      for (int f : fret)
+            if (f > 0)
+                  frets.insert(f);
+      if (frets.empty())
+            return 0;
+      // the runs of strings stopped at fret f that one finger lying along the fret can take: a string played open or
+      // stopped lower in between breaks a run (the finger would stop it at f)
+      auto runs = [&](int f) {
+            std::vector<std::vector<int>> out(1);
+            for (int s = 0; s < n; ++s) {
+                  if (fret[s] == f)
+                        out.back().push_back(s);
+                  else if (fret[s] >= 0 && fret[s] < f && !out.back().empty())
+                        out.emplace_back();
+                  }
+            if (out.back().empty())
+                  out.pop_back();
+            return out;
+            };
+      // fingers other than the index take three strings or fewer each (Blatter p. 285's half barre)
+      auto chunks = [](const std::vector<int>& run) {
+            int count = 0, start = -100;
+            for (int s : run)
+                  if (s - start >= 3) {
+                        ++count;
+                        start = s;
+                        }
+            return count;
+            };
+      const int low = *frets.begin();
+      int total = 0;
+      for (int f : frets)
+            if (f != low)
+                  for (const auto& r : runs(f))
+                        total += chunks(r);
+      // the index barres one run at the lowest fret, as many strings as it likes (Blatter p. 285's grande barre)
+      const std::vector<std::vector<int>> lowRuns = runs(low);
+      int all = 0;
+      for (const auto& r : lowRuns)
+            all += chunks(r);
+      int best = all;
+      for (const auto& r : lowRuns)
+            best = std::min(best, all - chunks(r) + 1);
+      return total + best;
+      }
+
+GuitarFit fitGuitar(const StringInstrument& in, const std::vector<int>& pitches)
+      {
+      GuitarFit fit;
+      const int n = int(in.strings.size());
+      const int k = int(pitches.size());
+      if (k == 0 || k > n)
+            return fit;
+      int top = 0;
+      for (int s : in.strings)
+            top = std::max(top, s);
+      std::vector<int> assign(k, -1);
+      std::vector<bool> used(n, false);
+      bool first = true;
+      std::function<void(int)> rec = [&](int i) {
+            if (i == k) {
+                  int low = 1000, high = -1, stopped = 0;
+                  for (int j = 0; j < k; ++j) {
+                        int f = pitches[j] - in.strings[assign[j]];
+                        if (f > 0) {
+                              ++stopped;
+                              low = std::min(low, f);
+                              high = std::max(high, f);
+                              }
+                        }
+                  double allowed = stopped >= 2 ? guitarSpanAt(low) : 0;
+                  double excess = stopped >= 2 ? (high - low) - allowed : -1;
+                  int fingers = guitarFingers(in, pitches, assign);
+                  if (first || excess < fit.excess) {
+                        fit.excess = excess;
+                        fit.spanAssign = assign;
+                        fit.lowFret = stopped >= 2 ? low : 0;
+                        fit.highFret = stopped >= 2 ? high : 0;
+                        fit.allowed = allowed;
+                        }
+                  if (first || fingers < fit.fingers) {
+                        fit.fingers = fingers;
+                        fit.fingerAssign = assign;
+                        }
+                  first = false;
+                  fit.assignable = true;
+                  return;
+                  }
+            for (int s = 0; s < n; ++s) {
+                  if (used[s])
+                        continue;
+                  int f = pitches[i] - in.strings[s];
+                  // above every string's last fret the note is G4's business, not G2's: any string under it will do
+                  if (f < 0 || (f > GUITAR_MAX_FRET && pitches[i] <= top + GUITAR_MAX_FRET))
+                        continue;
+                  used[s] = true;
+                  assign[i] = s;
+                  rec(i + 1);
+                  used[s] = false;
+                  }
+            };
+      rec(0);
+      return fit;
       }
 
 }     // namespace Playability
