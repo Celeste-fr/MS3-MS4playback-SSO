@@ -260,8 +260,8 @@ StringInstrument retune(const StringInstrument& in, const ScordaturaText& t)
                         p += 12;
                   }
             else {
-                  p = old - pc(old) + s.pc;               // the same pitch class nearest the old string
-                  if (p - old > 6)
+                  p = old - pc(old) + s.pc;               // the same pitch class nearest the old string (a guitar's tritone: down)
+                  if (p - old > 6 || (in.fretted && p - old == 6))
                         p -= 12;
                   else if (old - p > 6)
                         p += 12;
@@ -504,8 +504,8 @@ static const int SOLO_ONLY = 9;
 static const std::map<int, const char*> TOUCH_NAME = { { 3, "m3" }, { 4, "M3" }, { 5, "P4" }, { 7, "5th" } };
 static bool riskyTouch(int iv) { return iv == 3 || iv == 4 || iv == 7; }
 // The guitar's tables (G7). Natural harmonics touched at fret 12 (partial 2), 7 or 19 (3), 5 or 24 (4), 4, 9 or 16
-// (5) (Blatter p. 283; Sevsay p. 225: partials 2-5); partials 6 and 8 appear only on Blatter's chart (p. 446, their
-// nodes at frets 3 and 2), their other nodes derived: node k/n lies -12 log2(1 - k/n) frets from the nut, rounded
+// (5) (Blatter p. 283; Sevsay p. 225: partials 2-5); partials 6 and 8 from Blatter p. 445 (its text: the chart shows
+// partials 2-6 and 8) and the chart (p. 446, their nodes at frets 3 and 2), their other nodes derived: node k/n lies -12 log2(1 - k/n) frets from the nut, rounded
 // (the same rule gives Blatter's table for partials 2-5 exactly); nodes beyond fret 24 are left out (Blatter names
 // none). Artificial: the touch 12, 5, 4 or 3 frets above the stop (Blatter p. 283)
 static const std::map<int, int> GUITAR_NODES = { { 2, 8 }, { 3, 6 }, { 4, 5 }, { 5, 4 }, { 7, 3 }, { 8, 8 }, { 9, 5 },
@@ -542,6 +542,8 @@ static int lookupMap(const std::map<int, int>& m, int key)
       auto i = m.find(key);
       return i == m.end() ? 0 : i->second;
       }
+
+bool guitarArtificialTouch(int interval) { return lookupMap(GUITAR_TOUCH, interval) != 0; }
 
 // a diamond written at the node
 static HarmOne naturalAtNode(const StringInstrument& in, int touched)
@@ -652,7 +654,7 @@ HarmonicResult classifyHarmonic(const StringInstrument& in, const std::vector<Ha
       // a stopped note and a diamond a touch interval above: an artificial harmonic
       if (diamonds.size() == 1 && plain.size() == 1) {
             int st = plain[0].pitch, to = diamonds[0].pitch;
-            if (to > st) {
+            if (to > st && (!in.fretted || lookupMap(GUITAR_TOUCH, to - st))) {
                   HarmOne a = artificial(in, st, to, sp);
                   res.verdict = a.verdict;
                   res.reason = a.reason;
@@ -1862,13 +1864,25 @@ bool isGuitar(const QString& id, const QString& name)
             "|electric|elektr|électr|e-gitarre|steel\\s+guitar|pedal|\\b7[\\s-]*(string|saiter)|\\b11[\\s-]*(string|saiter)"
             "|soprano|\\balto\\b|bariton|contra|kontra|\\bterz|requinto|cavaquinho|ukulele"),
             QRegularExpression::CaseInsensitiveOption | QRegularExpression::UseUnicodePropertiesOption);
-      if (EXCLUDED.match(name).hasMatch())
+      // an electric guitar's word in the name: General MIDI's Distortion / Overdriven Guitar, lead, rhythm, jazz, clean
+      // guitars (Sevsay p. 224: the electric guitar's range is higher). Whatever the id: MuseScore fills a missing id
+      // from the name or the program, so a part named "Distortion Guitar" may carry the nylon-string guitar's id
+      static const QRegularExpression ELECTRIC_WORDS("distortion|overdriv|\\blead\\b|\\brhythm|\\bjazz|\\bclean\\b|\\bdist\\.",
+                                                     QRegularExpression::CaseInsensitiveOption);
+      if (EXCLUDED.match(name).hasMatch() || ELECTRIC_WORDS.match(name).hasMatch())
             return false;
-      if (id == "pluck.guitar.nylon-string" || id == "pluck.guitar.acoustic")
+      if (id == "pluck.guitar.nylon-string" || id == "pluck.guitar.acoustic" || id == "pluck.guitar.steel-string")
             return true;
       if (id.isEmpty() || id == "pluck.guitar")
             return NAME.match(name).hasMatch();
       return false;
+      }
+
+bool isGuitarSection(const QString& name)
+      {
+      static const QRegularExpression PLURAL(QString::fromUtf8("guitars|gitarren|chitarre|guitarras|guitares|\\b(I|1)\\s*[/&+]\\s*(II|2)\\b"),
+                                             QRegularExpression::CaseInsensitiveOption);
+      return PLURAL.match(name).hasMatch();
       }
 
 StringInstrument guitarInstrument()
@@ -1880,30 +1894,88 @@ StringInstrument guitarInstrument()
       return in;
       }
 
-bool guitarStringText(const QString& text, std::vector<std::pair<int, int>>* out)
+// a note name: a letter (German H = B) or a solfège name, with an accidental; -1 when it is none
+static int guitarNotePc(const QString& name, const QString& acc)
       {
-      // "6=D", "(6) = D", "⑥=D" (the circled digits ① to ⑥, U+2460-2465)
-      static const QRegularExpression PAIR(QString::fromUtf8("(?:\\(([1-6])\\)|(?<![\\d.])([1-6])|([①-⑥]))\\s*=\\s*"
-                                                             "([A-G])(bb|𝄫|♭♭|b|♭|##|x|𝄪|♯♯|#|♯)?(?![A-Za-z])"));
-      static const int LETTER_PC[7] = { 9, 11, 0, 2, 4, 5, 7 };     // A B C D E F G
+      static const std::map<QString, int> PCS = {
+            { "c", 0 }, { "d", 2 }, { "e", 4 }, { "f", 5 }, { "g", 7 }, { "a", 9 }, { "b", 11 }, { "h", 11 },
+            { "do", 0 }, { "ut", 0 }, { "re", 2 }, { QString::fromUtf8("ré"), 2 }, { "mi", 4 }, { "fa", 5 }, { "sol", 7 },
+            { "la", 9 }, { "si", 11 } };
+      auto i = PCS.find(name.toLower());
+      if (i == PCS.end())
+            return -1;
+      int alter = 0;
+      if (acc == "b" || acc == QString::fromUtf8("♭"))
+            alter = -1;
+      else if (acc == "bb" || acc == QString::fromUtf8("♭♭"))
+            alter = -2;
+      else if (acc == "#" || acc == QString::fromUtf8("♯"))
+            alter = 1;
+      else if (acc == "##" || acc == "x")
+            alter = 2;
+      return ((i->second + alter) % 12 + 12) % 12;
+      }
+
+bool guitarStringText(const QString& rawText, std::vector<std::pair<int, int>>* out)
+      {
+      const QString text = rawText.simplified();
+      // a jianpu header ("1=D 4/4": a key and a meter) is not a tuning
+      static const QRegularExpression METER("(?<![\\d/])\\d{1,2}\\s*/\\s*\\d{1,2}(?![\\d/])");
+      if (METER.match(text).hasMatch())
+            return false;
+      static const QString NOTE = QString::fromUtf8("(H|[A-G]|[Dd]o|DO|[Uu]t|[Rr][eé]|R[EÉ]|[Mm]i|MI|[Ff]a|FA|[Ss]ol|SOL|[Ll]a|LA|[Ss]i|SI)"
+                                                    "(##|bb|♭♭|#|♯|b|♭)?(?![A-Za-zé])");
       std::vector<std::pair<int, int>> got;
+      // "6=D", "⑥ = Ré", "(6) = D", "6th string to D", "6. Saite nach D", "6ª en Re", "string 6 = D" (the circled digits
+      // ① to ⑥, U+2460-2465). With a word for "to", the number needs an ordinal or the word string / Saite / cuerda
+      static const QRegularExpression PAIR(QString::fromUtf8(
+            "(?:\\(([1-6])\\)|([①-⑥])|(?<![\\d./])([1-6])(st|nd|rd|th|ª|º|°|\\.)?)(\\s*(?:string|saite|cuerda|corda|corde))?"
+            "\\s*(=|:|\\bto\\b|\\bnach\\b|\\ben\\b|\\bin\\b|\\bauf\\b)\\s*") + NOTE,
+            QRegularExpression::CaseInsensitiveOption);
       auto it = PAIR.globalMatch(text);
       while (it.hasNext()) {
             QRegularExpressionMatch m = it.next();
-            int string = !m.captured(1).isEmpty() ? m.captured(1).toInt()
-                         : !m.captured(2).isEmpty() ? m.captured(2).toInt()
-                         : m.captured(3).at(0).unicode() - 0x2460 + 1;
-            QString acc = m.captured(5);
-            int alter = 0;
-            if (acc == "b" || acc == QString::fromUtf8("♭"))
-                  alter = -1;
-            else if (acc == "bb" || acc == QString::fromUtf8("𝄫") || acc == QString::fromUtf8("♭♭"))
-                  alter = -2;
-            else if (acc == "#" || acc == QString::fromUtf8("♯"))
-                  alter = 1;
-            else if (!acc.isEmpty())
-                  alter = 2;
-            got.push_back({ string, ((LETTER_PC[m.captured(4).at(0).unicode() - 'A'] + alter) % 12 + 12) % 12 });
+            const QString conn = m.captured(6);
+            const bool symbol = conn == "=" || conn == ":";
+            const bool marked = !m.captured(1).isEmpty() || !m.captured(2).isEmpty() || !m.captured(4).isEmpty() || !m.captured(5).isEmpty();
+            if (!symbol && !marked)
+                  continue;                 // "6 in D": not a string
+            if (!m.captured(3).isEmpty() && conn == ":" && !marked)
+                  continue;                 // "6: D": not enough
+            const int string = !m.captured(1).isEmpty() ? m.captured(1).toInt()
+                               : !m.captured(2).isEmpty() ? m.captured(2).at(0).unicode() - 0x2460 + 1
+                               : m.captured(3).toInt();
+            const int p = guitarNotePc(m.captured(7), m.captured(8));
+            if (p >= 0)
+                  got.push_back({ string, p });
+            }
+      // "Drop D" (only D: other "drop" names mean different tunings)
+      static const QRegularExpression DROP_D("\\bdrop[\\s-]*D\\b(?![#♯b♭])", QRegularExpression::CaseInsensitiveOption);
+      if (got.empty() && DROP_D.match(text).hasMatch())
+            got.push_back({ 6, 2 });
+      // "Tuning: D A D G B E" (six names low to high after the word), or the word DADGAD
+      static const QRegularExpression SIX(QString::fromUtf8("(?:\\btuning|\\bstimmung|\\bafinaci[oó]n|\\baccordatura)\\s*[:=]?\\s*((?:")
+                                          + NOTE + QString::fromUtf8("[\\s,\\-–—/]*){6})$"), QRegularExpression::CaseInsensitiveOption);
+      static const QRegularExpression DADGAD("(?:^|\\s)DADGAD(?:$|\\s)");
+      QString six;
+      QRegularExpressionMatch sm = SIX.match(text);
+      if (got.empty() && sm.hasMatch())
+            six = sm.captured(1);
+      else if (got.empty() && DADGAD.match(text).hasMatch())
+            six = "D A D G A D";
+      if (!six.isEmpty()) {
+            static const QRegularExpression ONE(NOTE);
+            std::vector<int> pcs;
+            auto ni = ONE.globalMatch(six);
+            while (ni.hasNext()) {
+                  QRegularExpressionMatch n = ni.next();
+                  const int p = guitarNotePc(n.captured(1), n.captured(2));
+                  if (p >= 0)
+                        pcs.push_back(p);
+                  }
+            if (pcs.size() == 6)
+                  for (int k = 0; k < 6; ++k)
+                        got.push_back({ 6 - k, pcs[k] });       // low to high: string 6 first
             }
       if (got.empty())
             return false;
@@ -1912,16 +1984,18 @@ bool guitarStringText(const QString& text, std::vector<std::pair<int, int>>* out
       return true;
       }
 
-StringInstrument retuneGuitarStrings(const StringInstrument& in, const std::vector<std::pair<int, int>>& changes)
+StringInstrument retuneGuitarStrings(const StringInstrument& in, const std::vector<std::pair<int, int>>& changes,
+                                     const StringInstrument* reference)
       {
       StringInstrument out = in;
+      const StringInstrument& ref = reference && reference->strings.size() == in.strings.size() ? *reference : in;
       for (const auto& c : changes) {
             int idx = c.first - 1;                // string 1 = string I, index 0
             if (idx < 0 || idx >= int(out.strings.size()))
                   continue;
-            int old = out.strings[idx];
-            int p = old - pc(old) + c.second;     // the same pitch class nearest the old string
-            if (p - old > 6)
+            int old = ref.strings[idx];
+            int p = old - pc(old) + c.second;     // the same pitch class nearest the old string; a tritone goes down
+            if (p - old >= 6)
                   p -= 12;
             else if (old - p > 6)
                   p += 12;

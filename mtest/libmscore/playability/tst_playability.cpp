@@ -2836,8 +2836,17 @@ void TestPlayability::accordion()
       }
 
 //---------------------------------------------------------
-//   guitar (G1-G8, PLAYABILITY.md "Guitar"): guitar-tests.mscx from tools/playability/gen_guitar_tests.py
+//   guitar (G1-G8, PLAYABILITY.md "Guitar"): guitar-tests.mscx, guitar-frame.mscx, guitar-system.mscx and
+//   guitar-import.musicxml from tools/playability/gen_guitar_tests.py
 //---------------------------------------------------------
+
+static QStringList guitarKinds()
+      {
+      QStringList kinds;
+      for (const char* k : Playability::GUITAR_KINDS)
+            kinds << k;
+      return kinds;
+      }
 
 void TestPlayability::guitar()
       {
@@ -2845,6 +2854,7 @@ void TestPlayability::guitar()
       // the rules alone
       QVERIFY(isGuitar("pluck.guitar.nylon-string", "Classical Guitar"));
       QVERIFY(isGuitar("pluck.guitar.acoustic", "Acoustic Guitar"));
+      QVERIFY(isGuitar("pluck.guitar.steel-string", "Steel-string Guitar"));
       QVERIFY(isGuitar("", "Chitarre"));
       QVERIFY(isGuitar("pluck.guitar", "Gitarre"));
       QVERIFY(!isGuitar("pluck.guitar", "12-string Guitar"));
@@ -2852,23 +2862,47 @@ void TestPlayability::guitar()
       QVERIFY(!isGuitar("", "Bass Guitar"));
       QVERIFY(!isGuitar("pluck.guitar", "Baritone Guitar"));
       QVERIFY(!isGuitar("pluck.guitar.nylon-string", "7-string Guitar"));
+      QVERIFY(!isGuitar("", "Distortion Guitar"));
+      QVERIFY(!isGuitar("pluck.guitar", "Lead Guitar"));
+      QVERIFY(!isGuitar("", "Jazz Guitar"));
       QVERIFY(!isGuitar("strings.violin", "Violin"));
-      std::vector<std::pair<int, int>> sc;
-      QVERIFY(guitarStringText("6=D", &sc));
-      QCOMPARE(int(sc.size()), 1);
-      QCOMPARE(sc[0].first, 6);
-      QCOMPARE(sc[0].second, 2);
-      QVERIFY(guitarStringText(QString::fromUtf8("⑥ = D  ⑤=G"), &sc));
-      QCOMPARE(int(sc.size()), 2);
-      QCOMPARE(sc[1].first, 5);
-      QCOMPARE(sc[1].second, 7);
-      QVERIFY(guitarStringText("(6) = Eb", &sc));
-      QCOMPARE(sc[0].second, 3);
-      QVERIFY(!guitarStringText("q = 60", &sc));
-      QVERIFY(!guitarStringText("16=D", &sc));
+      QVERIFY(isGuitarSection("Guitars"));
+      QVERIFY(isGuitarSection("Guitar I/II"));
+      QVERIFY(!isGuitarSection("Guitar 2"));
+      // tuning texts
+      auto read = [](const QString& t) {
+            std::vector<std::pair<int, int>> sc;
+            QStringList out;
+            if (guitarStringText(t, &sc))
+                  for (const auto& p : sc)
+                        out << QString("%1=%2").arg(p.first).arg(p.second);
+            return out.join(" ");
+            };
+      QCOMPARE(read("6=D"), QString("6=2"));
+      QCOMPARE(read(QString::fromUtf8("⑥ = D  ⑤=G")), QString("6=2 5=7"));
+      QCOMPARE(read("(6) = Eb"), QString("6=3"));
+      QCOMPARE(read(QString::fromUtf8("⑥ = Ré")), QString("6=2"));
+      QCOMPARE(read("Drop D"), QString("6=2"));
+      QCOMPARE(read("Guitar (Drop D)"), QString("6=2"));
+      QCOMPARE(read("Tune 6th string to D"), QString("6=2"));
+      QCOMPARE(read("6th string = D"), QString("6=2"));
+      QCOMPARE(read("6. Saite nach D"), QString("6=2"));
+      QCOMPARE(read(QString::fromUtf8("6ª en Re")), QString("6=2"));
+      QCOMPARE(read("5. Saite nach H"), QString("5=11"));
+      QCOMPARE(read("Tuning: D A D G B E"), QString("6=2 5=9 4=2 3=7 2=11 1=4"));
+      QCOMPARE(read("DADGAD"), QString("6=2 5=9 4=2 3=7 2=9 1=2"));
+      QCOMPARE(read("1=D 4/4"), QString());           // a jianpu header: a key and a meter
+      QCOMPARE(read("Capo II"), QString());
+      QCOMPARE(read("6 in D"), QString());
+      QCOMPARE(read("q = 60"), QString());
+      QCOMPARE(read("16=D"), QString());
+      QCOMPARE(read("Drop C"), QString());
       StringInstrument dropD = retuneGuitarStrings(guitarInstrument(), { { 6, 2 } });
       QCOMPARE(dropD.strings.back(), 38);
       QCOMPARE(dropD.tuning, QString("D A D G B E"));
+      QCOMPARE(retuneGuitarStrings(guitarInstrument(), { { 6, 10 } }).strings.back(), 34);     // a tritone goes down: Bb1
+      const StringInstrument std6 = guitarInstrument();
+      QCOMPARE(retuneGuitarStrings(retuneGuitarStrings(std6, { { 6, 10 } }), { { 6, 4 } }, &std6).strings.back(), 40);
       // G5's hand frame: fret 1 to 5 in position I, the same length higher up (spanAt); both extensions fret 1 to 6
       QVERIFY(std::fabs(guitarSpanAt(1) - 4) < 1e-9);
       QVERIFY(std::fabs(guitarSpanAt(1, GUITAR_BOTH_EXT_FRETS) - 5) < 1e-9);
@@ -2879,54 +2913,72 @@ void TestPlayability::guitar()
       QCOMPARE(fitGuitar(guitarInstrument(), { 41, 47, 54, 58, 63 }).fingers, 5);
       QVERIFY(!fitGuitar(guitarInstrument(), { 40, 41 }).assignable);
       QVERIFY(fitGuitar(guitarInstrument(), { 40, 46 }).assignable);
+      QVERIFY(guitarArtificialTouch(12) && guitarArtificialTouch(3) && !guitarArtificialTouch(7));
 
+      const QStringList kinds = guitarKinds();
       MasterScore* score = readScore(DIR + "guitar-tests.mscx");
       QVERIFY(score);
       PlayabilityResult r = Playability::analyse(score);
-      QStringList kinds;
-      for (const char* k : GUITAR_KINDS)
-            kinds << k;
       const QString seven = "E2 + A2 + D3 + G3 + B3 + E4 + G4";
       QStringList want = {
-            // G1, red; six open strings (bar 1) clean
+            // G1: red for one player; a rolled chord and a section's chord dark yellow; "non div." red again
             "2 | Guitar | guitarNotes | impossible | " + seven,
-            "1 | Guitars | guitarNotes | impossible | " + seven,
-            // G2, red: the planted same-string chord, a note struck while a held one keeps its string; the controls
-            // (bars 5, 7) clean; in drop D, D2 + E2 both on string VI
+            "39 | Guitar | guitarNotes | risky | " + seven,
+            "1 | Guitars | guitarNotes | risky | " + seven,
+            "2 | Guitars | guitarNotes | risky | " + seven,
+            "3 | Guitars | guitarNotes | impossible | " + seven,
+            // G2, red from struck notes only: the planted same-string chord, drop D's D2 + E2; the controls clean; with
+            // an unclear String Data octave dark yellow
             "4 | Guitar | guitarStrings | impossible | E2 + F2",
-            "6 | Guitar | guitarStrings | impossible | F2",
             "3 | Guitar 2 | guitarStrings | impossible | D2 + E2",
-            // G3, red; drop D by String Data, "6=D", "⑥=D" and a scordatura text clean; "standard tuning" back to E2;
-            // the treble-clef guitar's String Data read with its transposition
-            "8 | Guitar | guitarLow | impossible | D2",
+            "1 | Guitar Y | guitarStrings | risky | E2 + F2",
+            // a held note that cannot keep its string: dark yellow on the held note
+            "6 | Guitar | guitarHeld | risky | E2",
+            "34 | Guitar | guitarHeld | risky | G#4",
+            "37 | Guitar | guitarHeld | risky | E2",
+            // G3: red only in a stated tuning ("standard tuning", drop D by String Data, "⑥=D", the stated tuning after
+            // the retunes with a capo text); dark yellow when no tuning is stated
+            "8 | Guitar | guitarLow | risky | D2",
             "23 | Guitar | guitarLow | impossible | D2",
+            "44 | Guitar | guitarLow | impossible | D2",
             "2 | Guitar 2 | guitarLow | impossible | C#2",
             "2 | Chitarra | guitarLow | impossible | C#2",
-            "2 | Guitar T | guitarLow | impossible | D2",
+            "2 | Guitar T | guitarLow | risky | D2",
+            "3 | Guitar X | guitarLow | impossible | C#2",
+            "1 | Steel | guitarLow | risky | D2",
             // G4: B5 clean, C6 dark yellow
             "9 | Guitar | guitarHigh | risky | C6",
             // G5: 5 frets in position I dark yellow, the same 5 frets at 12-17 clean, frets 1-5 clean
             "10 | Guitar | guitarSpan | risky | F2 + D#3 + E3",
             // G6: five fingers dark yellow, four clean, the F barre clean
             "13 | Guitar | guitarFingers | risky | F2 + B2 + F#3 + A#3 + D#4",
-            // G7: no node (A#2 diamond), no natural harmonic sounds F5 (circle), touch 7 frets; partials 2, 6, 8 clean
+            // G7: no node (A#2 diamond), no natural harmonic sounds F5 (circle), F4 diamond 17 frets over C3 (no touch:
+            // a natural harmonic, no node; C3 an ordinary note); partials 2, 6, 8 clean
             "15 | Guitar | guitarHarmonic | risky | A#2",
             "16 | Guitar | guitarHarmonic | risky | F5",
-            "17 | Guitar | guitarHarmonic | risky | C3 + G3",
+            "17 | Guitar | guitarHarmonic | risky | F4",
             // G8: eighths at quarter = 90 clean, at 120 dark yellow
             "19 | Guitar | guitarHarmonicSpeed | risky | D3 + D4" };
       want.sort();
       compare(kindRows(r, kinds), want);
       for (const PlayabilityRow& row : r.rows) {
-            if (row.kind == "guitarStrings" && row.bar == 6)
-                  QVERIFY2(row.reason.startsWith("these notes (with E2 held) cannot each have a string of their own in the tuning "
-                                                 "in force (E A D G B E, frets 0-24)"), qPrintable(row.reason));
-            if (row.kind == "guitarLow" && row.staff == "Guitar 2")
-                  QVERIFY2(row.reason.startsWith("below the lowest string, D2, of the tuning in force (D A D G B E)"),
+            if (row.kind == "guitarHeld" && row.bar == 6)
+                  QVERIFY2(row.reason.startsWith("held from before, it cannot keep a string while F2 is struck (E A D G B E)"),
                            qPrintable(row.reason));
+            if (row.kind == "guitarLow" && row.staff == "Guitar 2")
+                  QVERIFY2(row.reason.startsWith("below the lowest string, D2, of the tuning the score gives (D A D G B E)"),
+                           qPrintable(row.reason));
+            if (row.kind == "guitarLow" && row.bar == 8)
+                  QVERIFY2(row.reason.startsWith("below E2, the lowest string of E A D G B E (the score states no tuning)"),
+                           qPrintable(row.reason));
+            if (row.kind == "guitarStrings" && row.bar == 4)
+                  QVERIFY2(row.reason.endsWith("six strings (Blatter pp. 278, 445; Sevsay p. 224; Adler p. 102), one note per "
+                                               "string (derived)"), qPrintable(row.reason));
             if (row.kind == "guitarSpan")
-                  QCOMPARE(row.reason, QString("stopped notes 5 frets apart at best (frets 1-6): from fret 1 the hand covers 4, the "
-                                               "length of a position with one extension, fret 1 to 5 in position I (Blatter p. 445)"));
+                  QVERIFY2(row.reason.startsWith("stopped notes 5 frets apart at best (frets 1-6): from fret 1 the hand covers 4,"),
+                           qPrintable(row.reason));
+            if (row.kind == "guitarHigh")
+                  QVERIFY2(row.reason.startsWith("above B5 (written B6), the 19th fret of the highest string"), qPrintable(row.reason));
             if (row.kind == "guitarHarmonicSpeed")
                   QVERIFY2(row.reason.startsWith("artificial harmonics 0.25 s apart"), qPrintable(row.reason));
             }
@@ -2943,10 +2995,36 @@ void TestPlayability::guitar()
       QVERIFY(violinKinds.contains("stop"));
       QVERIFY(violinKinds.contains("technique"));
       QVERIFY(violinKinds.contains("slur"));
-      // red marks for the reds, dark yellow for the rest
+      // red marks for the reds, dark yellow for the rest; the held note is marked, not the struck one
       QStringList m = marks(score, r);
-      QVERIFY2(m.contains("Guitar | 13440 | 38 | impossible"), qPrintable(m.join("\n")));          // bar 8's D2
-      QVERIFY2(m.contains("Guitar | 31680 | 55 | outOfReach"), qPrintable(m.join("\n")));          // bar 17's C3 + G3: G3
+      QVERIFY2(m.contains("Guitar | 13440 | 38 | outOfReach"), qPrintable(m.join("\n")));          // bar 8's D2
+      QVERIFY2(m.contains("Guitar | 42240 | 38 | impossible"), qPrintable(m.join("\n")));          // bar 23's D2
+      QVERIFY2(m.contains("Guitar | 31680 | 65 | outOfReach"), qPrintable(m.join("\n")));          // bar 17's F4 diamond
+      QVERIFY2(!m.contains("Guitar | 31680 | 48 | outOfReach"), qPrintable(m.join("\n")));         // its C3: clean
+      QVERIFY2(m.contains("Guitar | 9600 | 40 | outOfReach"), qPrintable(m.join("\n")));           // bar 6's held E2
+      QVERIFY2(!m.contains("Guitar | 10080 | 41 | impossible"), qPrintable(m.join("\n")));         // its struck F2: not red
+      delete score;
+
+      // a tuning in a title frame, a system text on the top staff: read, so stated
+      score = readScore(DIR + "guitar-frame.mscx");
+      QVERIFY(score);
+      r = Playability::analyse(score);
+      compare(kindRows(r, kinds), { "2 | Guitar | guitarLow | impossible | C#2" });
+      delete score;
+      score = readScore(DIR + "guitar-system.mscx");
+      QVERIFY(score);
+      r = Playability::analyse(score);
+      compare(kindRows(r, kinds), QStringList());
+      delete score;
+
+      // MusicXML import of a treble-clef guitar: the template's String Data with the file's transposition is an octave
+      // low; the octave check puts it back (else C5 + E5 would be red: both only on string I), so E2 + F2 can be red
+      score = readScore(DIR + "guitar-import.musicxml");
+      QVERIFY(score);
+      r = Playability::analyse(score);
+      QStringList imported = kindRows(r, kinds);
+      QVERIFY2(imported == QStringList({ "2 | Guitar | guitarLow | risky | D2", "3 | Guitar | guitarStrings | impossible | E2 + F2" }),
+               qPrintable(imported.join("\n")));
       delete score;
       }
 

@@ -483,9 +483,10 @@ StradellaChord stradellaChord(int pitchClassMask);
 //---------------------------------------------------------
 //   Guitar, G1-G8 (owner-approved 2026-11-23; PLAYABILITY.md "Guitar"). The six-string classical / acoustic
 //   guitar, at SOUNDING pitch (MuseScore keeps the sound; the guitar is written an octave higher: Blatter p. 279
-//   Ex. 6.18, Sevsay p. 224, Adler p. 102). Red only for what no guitar in the tuning in force can play: more
-//   notes than strings (G1), notes that cannot each have a string (G2), a note below the lowest string (G3).
-//   Everything else is dark yellow. Sources are cited by page only.
+//   Ex. 6.18, Sevsay p. 224, Adler p. 102). Red only for what no guitar in the tuning in force can play, and only
+//   from STRUCK notes of one player: more notes than strings (G1, not rolled), struck notes that cannot each have a
+//   string (G2), a note below the lowest string of a tuning the score states (G3). Everything else is dark yellow
+//   (a section staff, a held note, an unstated tuning, an unclear String Data octave). Sources are cited by page only.
 //   A guitar is a StringInstrument with fretted set (strings string I first; the String Data or a scordatura
 //   text retunes it as for the bowed strings), but it is never one of the bowed strings: lookup() does not know
 //   it, so no bowing, divisi, stop or tremolo check reads it (the guitar pass, Pass::checkGuitar, is its own).
@@ -495,10 +496,10 @@ constexpr int GUITAR_STRINGS = 6;                   // Blatter pp. 278, 445; Sev
 // G2: a note may be stopped up to fret 24 (Blatter p. 283, footnote: some guitars have 24 frets, not all; the
 // usual 19 frets, Blatter pp. 278, 445, only for G4): red only when no 24-fret guitar has a string for every note
 constexpr int GUITAR_MAX_FRET = 24;
+// G4: above the highest string + 19 frets: in standard tuning sounding B5, written B6 (Blatter p. 278, 19 frets;
+// p. 282, the top, high B, varies and some guitars reach C or a little above; Sevsay p. 224, written b''' or c'''').
+// Follows a retuned string I. Dark yellow, never red
 constexpr int GUITAR_FRETS = 19;
-// G4: above sounding B5 (written B6): string I (E4) + 19 frets (Blatter p. 278, 19 frets; p. 282, the top "high
-// B", some guitars reach C or a little above; Sevsay p. 224, written b''' or c''''). Dark yellow, never red
-constexpr int GUITAR_TOP = 83;
 // G5 hand frame: Blatter p. 445's position with one extension. In position I (the index ready at fret 1) the
 // hand covers frets 1-4 and the little finger's extension reaches fret 5: the reference is the LENGTH along the
 // string from fret 1 to fret 5. Frets follow the 12-TET geometry, so the same length covers more frets higher up
@@ -519,13 +520,28 @@ constexpr double GUITAR_ARTIFICIAL_SECONDS = 60.0 / GUITAR_ARTIFICIAL_BPM / 2;
 // bass guitar, 12-string, high-G (Nashville) tuning, electric, pedal steel, 7- / 11-string, soprano, alto,
 // baritone, contra or terz guitars (out of scope: PLAYABILITY.md "Guitar")
 bool isGuitar(const QString& instrumentId, const QString& name);
+// a guitar section, one staff for several players: a plural name (Guitars, Gitarren, chitarre, guitarras, guitares) or
+// "I/II", "1 & 2"; like the bowed sections, a chord one player cannot play is dark yellow (players may divide it)
+// unless a "non div." text is in force
+bool isGuitarSection(const QString& name);
+// an artificial harmonic's touch above the stop: 12, 5, 4 or 3 frets (Blatter p. 283)
+bool guitarArtificialTouch(int interval);
+// the String Data's lowest string after the octave check: within B1-A2 (window, ours: E2 with drop tunings down to B1
+// and a fourth up; MusicXML import can leave a guitar's String Data an octave off). Outside it the strings move by
+// octaves into it; a lowest string that no octave brings in (A#1 / Bb1) leaves the part without red from G2 / G3
+constexpr int GUITAR_LOW_WINDOW_LO = 35;            // B1
+constexpr int GUITAR_LOW_WINDOW_HI = 45;            // A2
 // the standard guitar, E4 B3 G3 D3 A2 E2 sounding, string I first (Blatter p. 279 Ex. 6.18; Sevsay p. 224)
 StringInstrument guitarInstrument();
-// a guitar tuning text: "6=D", "⑥=D", "(6) = D", several in one text ("6=D 5=G"); out: string number 1-6 and
-// the pitch class. False when the text has none
+// a guitar tuning text, read conservatively: "6=D", "⑥ = D", "(6) = D", several in one text ("6=D 5=G"), "6th string to
+// D", "6. Saite nach D", "6ª en Re", solfège (Do Re Mi Fa Sol La Si) and German H; "Drop D"; "Tuning: D A D G B E" (six
+// names after the word tuning / Stimmung / afinación / accordatura) and "DADGAD". Out: string number 1-6 and the pitch
+// class. False when the text has none, and for a jianpu header (a text with a meter, "1=D 4/4")
 bool guitarStringText(const QString& text, std::vector<std::pair<int, int>>* out);
-// those strings retuned, each to the pitch class nearest the string it replaces (as retune)
-StringInstrument retuneGuitarStrings(const StringInstrument& in, const std::vector<std::pair<int, int>>& changes);
+// those strings retuned, each to the pitch class nearest the reference's string (the String Data's; default: the
+// string it replaces), as retune; an exact tritone goes down ("6=Bb" is Bb1, and a later "6=E" E2 again)
+StringInstrument retuneGuitarStrings(const StringInstrument& in, const std::vector<std::pair<int, int>>& changes,
+                                     const StringInstrument* reference = nullptr);
 // G5: how many frets the hand covers from fret `pos` (its lowest stopped fret): the length from fret
 // GUITAR_SPAN_POS to GUITAR_SPAN_POS + refFrets, moved along the neck (spanAt)
 double guitarSpanAt(double pos, double refFrets = GUITAR_SPAN_FRETS);
@@ -798,7 +814,7 @@ constexpr const char* NOTATION_KINDS[] = {
 // the guitar's row kinds (G1-G8), in order
 constexpr const char* GUITAR_KINDS[] = {
       "guitarNotes", "guitarStrings", "guitarLow", "guitarHigh", "guitarSpan", "guitarFingers", "guitarHarmonic",
-      "guitarHarmonicSpeed" };
+      "guitarHarmonicSpeed", "guitarHeld" };
 
 }     // namespace Playability
 }     // namespace Ms
