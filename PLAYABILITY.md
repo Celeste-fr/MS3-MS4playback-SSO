@@ -717,16 +717,16 @@ below (red needs a stated tuning, red only from struck notes, the String Data's 
 chords dark yellow). Sources: Blatter 1997 pp. 278-285, 445-446; Sevsay pp. 224-225; Adler p. 102
 (`~/MuseScore/orchestration-checker/research/guitar-sources.md`; every number below was checked on the printed page, or
 is marked *derived*). Code: `Pass::checkGuitar`, `Pass::guitarTuning`; limits and their sources in `playabilityrules.h`
-(Guitar). Test `guitar` (`guitar-tests.mscx`, `guitar-frame.mscx`, `guitar-system.mscx`, `guitar-import.musicxml` from
+(Guitar). Test `guitar` (`guitar-tests.mscx`, `guitar-tabpair.mscx`, `guitar-frame.mscx`, `guitar-system.mscx`, `guitar-import.musicxml` from
 `tools/playability/gen_guitar_tests.py`, whose header lists every bar and its expected rows).
 
 | Check | Red | Dark yellow |
 |---|---|---|
 | G1 notes struck at once | more than 6, one player | more than 6, rolled (arpeggio) or a section staff without "non div." |
 | G2 a string for every struck note | no assignment of distinct strings, frets 0-24, one player, the String Data's octave settled | the same on a section staff without "non div.", or with the octave unclear |
-| guitarHeld (G2 for held notes) | — | a note held from before cannot keep a string while the new notes sound (row on the held note) |
+| guitarHeld (G2 for held notes) | — | — (a **notation** row, teal: a held note written longer than it can ring, on the notes that must be let go) |
 | G3 below the lowest string | in a stated tuning (String Data not standard, or a tuning text in force) | no tuning stated, or the octave unclear: needs a retuned string |
-| G4 top | — | above the highest string + 19 frets (standard: sounding B5, written B6) |
+| G4 top | — | above the highest string + 20 frets (standard: sounding C6, written C7); one row per run of the same note |
 | G5 hand span | — | the stopped span longer than the hand frame at its lowest fret, in every assignment |
 | G6 fingers | — | more than 4 fingers in every assignment (one index barre, other fingers ≤ 3 strings) |
 | G7 harmonics | — | a natural harmonic no open string gives as partial 2-6 or 8; unreadable harmonic notation |
@@ -734,16 +734,30 @@ is marked *derived*). Code: `Pass::checkGuitar`, `Pass::guitarTuning`; limits an
 
 - **Which parts**: MusicXML id `pluck.guitar.nylon-string`, `pluck.guitar.acoustic` or `pluck.guitar.steel-string` (a
   MusicXML standard sound), `pluck.guitar` or no id with a guitar name (guitar, guitare, Gitarre, chitarra, guitarra,
-  plurals: Blatter p. 278's name table). **Out of scope** (no rows), by id or a word in the instrument's or the part's
-  name: bass guitar, 12-string (Blatter p. 281: paired strings), high-G tuning (p. 279), electric and pedal-steel guitars
-  (Sevsay p. 224 gives the electric guitar a higher range; not approved here), and the electric guitar's usual names
+  plurals: Blatter p. 278's name table; Portuguese violão, the Brazilian choro repertoire, a whole word so that "viola"
+  is not read). A part named **"Steel Guitar"** (Soundslice's name for the six-string acoustic guitar; 35 of the 400
+  GAPS files) is checked when its String Data is six strings whose lowest lies in B1-A2 (an octave either way), or when
+  it has none, whatever id MuseScore guessed for it (program 25 gives the bouzouki's), except the pedal steel's
+  (`pluck.guitar.pedal-steel`). **Out of scope** (no rows), by id or a word in the instrument's or the part's
+  name: bass guitar, 12-string (Blatter p. 281: paired strings), high-G tuning (p. 279), electric guitars, pedal steel,
+  lap steel, dobro and Hawaiian guitars (Sevsay p. 224 gives the electric guitar a higher range; not approved here), and the electric guitar's usual names
   whatever the id (General MIDI's Distortion / Overdriven Guitar, lead, rhythm, jazz, clean: MuseScore fills a missing id
   from the name or the MIDI program, so such a part may carry the nylon-string guitar's id; an acoustic part named
   "Rhythm Guitar" is therefore not checked, a lost check, not a false alarm), 7- and 11-string, soprano, alto, baritone,
   contra and terz guitars, cavaquinho; a String Data of other than six strings. The family is decided by the part's first
   instrument; after an **instrument change** to an instrument that is not a guitar the checks stop until a guitar comes
   back (a part that starts as an electric guitar and changes to a guitar is not checked: limitation). Only struck notes
-  raise red; hidden notes are not played.
+  raise red; hidden notes are not played. **Parts with no instrument word** ("Untitled", "Track 1", "Piste 1": about
+  44 of the 400 GAPS files and 2 of the sweep's 24 scores) are not checked: MuseScore guesses their id from the program
+  (a piano's for none), and reading any six-string part as a guitar would also take in lutes and bouzoukis. A lost check,
+  not a false alarm; name the part.
+- **Notation and TAB as two parts** (`Pass::guitarTabPartner`): Soundslice (every GAPS file) and similar exporters write
+  the notes and the tablature as two MusicXML parts with the same name, and only the TAB part carries the tuning
+  (`<staff-tuning>`). A notation part then takes the String Data of a six-string part whose staves are all tablature
+  and which has the same name, else of the part right after it with the same instrument id, and that tuning counts as
+  **stated** (the exporter wrote it; drop D gives red below D2). Only the notation part of such a pair is checked, so
+  rows are not doubled. MuseScore's own linked TAB staff (a staff of the same part) needs none of this: its notes are
+  the same moments and give each row once.
 - **One player or a section**: a guitar is one player. A plural name (Guitars, Gitarren, chitarre, guitarras, guitares)
   or "I/II", "1 & 2" is a section staff: as for the bowed sections, a chord one player cannot play (G1, G2) is dark
   yellow, since the players may divide it, unless a "non div." text is in force (then red).
@@ -759,7 +773,9 @@ is marked *derived*). Code: `Pass::checkGuitar`, `Pass::guitarTuning`; limits an
   under the title) and the part's names, conservatively (`guitarStringText`): "6=D", "⑥ = D", "(6) = D", several in one
   text; "6th string to D", "6th string = D", "6. Saite nach D", "6ª en Re"; note names as letters (German H = B) or
   solfège (Do Re Mi Fa Sol La Si, "Ré"); "Drop D" (only D: other "drop" names mean other tunings); "Tuning: D A D G B
-  E" (six names after tuning / Stimmung / afinación / accordatura) and "DADGAD". Each named string goes to the pitch
+  E" (six names after tuning / Stimmung / afinación / accordatura / accordage), the six letters run together after
+  those words ("Tuning DGDGBE", "DADF#AD", sharps and flats included; exactly six, and only after the word, so ordinary
+  words are not read) and "DADGAD". Each named string goes to the pitch
   class nearest the String Data's string (an exact tritone goes **down**: "6=Bb" is Bb1, and a later "6=E" is E2 again).
   A scordatura text naming six strings ("scord. D A D G B E", `scordaturaText`) retunes all six; "normal / standard
   tuning", "accord.", "scord. off" go back to the String Data. A text with a meter ("1=D 4/4", a jianpu header: a key, not
@@ -768,9 +784,11 @@ is marked *derived*). Code: `Pass::checkGuitar`, `Pass::guitarTuning`; limits an
   force. Sevsay p. 225: the strings can be tuned higher or lower.
 - **What sounds together** (per moment of `partMoments`: every staff and voice, grace notes as their own moments): red
   comes only from the notes **struck**. The notes **held** from before (tied, or still sounding by their written value)
-  are added to the struck ones and the best string assignment is searched anew; when they no longer fit, the held note
-  gets a dark-yellow **guitarHeld** row (once per note): its written length cannot be held, and players let such notes go
-  (guitar polyphony is often written longer than it can sound). The same pitch in two voices is one note (one string); a
+  are added to the struck ones and the best string assignment is searched anew; when they no longer fit, the fewest held
+  notes are let go (the lower first among equal choices) until the rest fit, and only those get a **guitarHeld** row
+  (once per note). It is a **notation** (teal) row since the sweep of 2026-11-23: every one of its 96 rows on real scores
+  was a bass or chord tone written longer than it can ring (or under a damping x-head strum), which guitar editions do
+  all the time and players simply let go: a writing convention, not a playing risk. The same pitch in two voices is one note (one string); a
   held pitch equal to a struck one is that struck note. Harmonics are G7/G8's and are left out of G2-G6 (limitation: a
   harmonic's string is not checked against the other notes).
 - **G1** (`GUITAR_STRINGS`): more than six different pitches struck at once: six strings (Blatter pp. 278, 445; Sevsay
@@ -784,10 +802,12 @@ is marked *derived*). Code: `Pass::checkGuitar`, `Pass::guitarTuning`; limits an
 - **G3**: below the lowest open string of the tuning in force. Red only when the tuning is stated (then no string has the
   note); otherwise dark yellow: the note needs a retuned string (Sevsay p. 225), and the reason says to write "6=D" or set
   the String Data.
-- **G4** (`GUITAR_FRETS`): above the highest string + 19 frets, the highest string as tuned: in standard tuning sounding
-  B5, written B6 (Blatter p. 278: 19 frets; p. 282: the top, high B, varies, some guitars reach C or a little above;
-  Sevsay p. 224: the concert guitar to written b''' or c''''). Dark yellow only: some guitars go higher. Harmonics are not
-  checked here (they sound above the frets).
+- **G4** (`GUITAR_FRETS`): above the highest string + 20 frets, the highest string as tuned: in standard tuning sounding
+  C6, written C7 (Sevsay p. 224: the concert guitar to written c'''', sounding C6, fret 20 on string I). Context: Blatter
+  p. 278 gives 19 frets and p. 282 says the top, high B, varies, some guitars reach C or a little above; the sweep found a
+  recorded C6 (fret 20) tremolo in Barrios, *Sueño en la Floresta*, so 19 frets flagged the very note Sevsay allows. Dark
+  yellow only: some guitars go higher. One row per run of the same high note repeated in a voice (a tremolo), not one per
+  stroke. Harmonics are not checked here (they sound above the frets).
 - **G5 hand span** (`guitarSpanAt`, the owner's change of 2026-11-23: the violin's physical hand frame): Blatter p. 445's
   chart shows a position (the Roman numeral is the fret the index is ready to stop) plus one extension of one fret, by
   the little finger toward the bridge or, except in position I, the index toward the nut, and the two extensions cannot
@@ -799,9 +819,13 @@ is marked *derived*). Code: `Pass::checkGuitar`, `Pass::guitarTuning`; limits an
   13-16); the growth higher up is *derived* from the frets' geometry (the owner's model), not read from the chart. It only
   makes G5 more lenient. Dark yellow when the stopped notes' span (highest minus lowest fret) is longer than that at
   their lowest fret **in every assignment**; open strings are free. The notes counted are the struck ones plus held
-  **open** strings (a held stopped note can be let go). A 5-fret stretch in position I (frets 1-6) is dark yellow, the same
+  **open** strings (a held stopped note can be let go), unless the held open string makes the fit wider or needs more
+  fingers: then it is let go too (the sweep: Cardoso, *Bailecito* bar 31, F#3 stops string IV and cuts the open D3). A 5-fret stretch in position I (frets 1-6) is dark yellow, the same
   five frets at 12-17 clean. **Never red** for now. Both extensions at once would be fret 1 to 6 (`GUITAR_BOTH_EXT_FRETS`,
-  5 frets from fret 1, 6.58 from fret 5): kept as a constant for a possible red limit later, not used.
+  5 frets from fret 1, 6.58 from fret 5): kept as a constant for a possible red limit later, not used. The threshold stays
+  at one extension (the owner, 2026-11-23: 3 rows in the sweep's 24 scores is acceptable for "risky"). The sweep found
+  5-fret stretches performed in recordings (Llobet, *El Noi de la Mare*, frets 2-7; Saint-Saëns, *The Swan*, arr., frets
+  2-7; Villa-Lobos, *Schottish-Choro*, frets 4-9), so a both-extensions length must **never** be red.
 - **G6 fingers** (`guitarFingers`, *derived*): four left-hand fingers (Sevsay p. 225: with the barre, up to six notes
   with four fingers; Blatter p. 445; Adler p. 102). A finger lies along one fret over a run of neighbouring strings,
   broken by a string played open or stopped lower in between (the finger would stop it); the index takes any run at the
@@ -834,5 +858,10 @@ is marked *derived*). Code: `Pass::checkGuitar`, `Pass::guitarTuning`; limits an
 pick changes (Blatter p. 282: at least four bars of moderate 4/4; not read), capo (Blatter pp. 284-285; a capo text
 is not read: write the sounding pitches), harmonics' strings against the other notes, artificial harmonics written as
 one note with a text, the 4/5 node (beyond fret 24, not in the books), angled barres, named open tunings, the electric
-guitar's range (Sevsay p. 224), Blatter p. 287's remark that the guitar usually plays three notes or fewer (stylistic). No sweep of real guitar
-scores yet (the bowed and accordion checks each had one).
+guitar's range (Sevsay p. 224), Blatter p. 287's remark that the guitar usually plays three notes or fewer (stylistic),
+harmonics written as words ("harm. 12", GAPS's habit: read as ordinary notes).
+
+**Sweep** (2026-11-23, `~/MuseScore/orchestration-checker/research/false-alarm-sweep-guitar.md`): 24 real scores (GAPS
+Soundslice exports, pfsynth, one MuseScore 2 TAB) plus 380 more GAPS files. No red on playable music in a valid file;
+222 of 231 dark-yellow rows were false, from four causes now fixed (TAB pairs, run-together tuning letters, G4 at 19
+frets, held open strings in G5); guitarHeld became notation, detection gained "Violão" and "Steel Guitar".

@@ -1858,10 +1858,10 @@ int slideGlissando(Brass b, int attachments, int from, int to, QString* reason)
 
 bool isGuitar(const QString& id, const QString& name)
       {
-      static const QRegularExpression NAME(QString::fromUtf8("guitar|guitare|gitarr|chitarr"), QRegularExpression::CaseInsensitiveOption);
+      static const QRegularExpression NAME(QString::fromUtf8("guitar|guitare|gitarr|chitarr|\\bviol[aã]o\\b"), QRegularExpression::CaseInsensitiveOption);
       static const QRegularExpression EXCLUDED(QString::fromUtf8(
             "bass|bajo|basse|\\b12\\b|12[\\s-]*(string|saiter|corde)|twelve|zwölf|dodici|high[\\s-]*g\\b|nashville|high[\\s-]*strung"
-            "|electric|elektr|électr|e-gitarre|steel\\s+guitar|pedal|\\b7[\\s-]*(string|saiter)|\\b11[\\s-]*(string|saiter)"
+            "|electric|elektr|électr|e-gitarre|pedal|lap[\\s-]*steel|dobro|hawaii|\\b7[\\s-]*(string|saiter)|\\b11[\\s-]*(string|saiter)"
             "|soprano|\\balto\\b|bariton|contra|kontra|\\bterz|requinto|cavaquinho|ukulele"),
             QRegularExpression::CaseInsensitiveOption | QRegularExpression::UseUnicodePropertiesOption);
       // an electric guitar's word in the name: General MIDI's Distortion / Overdriven Guitar, lead, rhythm, jazz, clean
@@ -1876,6 +1876,17 @@ bool isGuitar(const QString& id, const QString& name)
       if (id.isEmpty() || id == "pluck.guitar")
             return NAME.match(name).hasMatch();
       return false;
+      }
+
+// a part named "Steel Guitar" (Soundslice's name for the six-string acoustic guitar) that is not a pedal or lap steel,
+// dobro or Hawaiian guitar: checked as a guitar when its String Data is six strings near the standard tuning (the
+// caller looks). Any id but the pedal steel's: MuseScore guesses a missing id from the program (25 gives the bouzouki)
+bool isSteelNamedGuitar(const QString& id, const QString& name)
+      {
+      static const QRegularExpression STEEL("\\bsteel[\\s-]*(string\\s+)?guitar", QRegularExpression::CaseInsensitiveOption);
+      if (id == "pluck.guitar.pedal-steel" || !STEEL.match(name).hasMatch())
+            return false;
+      return isGuitar(QString(), name);         // the exclusions (pedal, lap steel, dobro, electric words...)
       }
 
 bool isGuitarSection(const QString& name)
@@ -1953,14 +1964,28 @@ bool guitarStringText(const QString& rawText, std::vector<std::pair<int, int>>* 
       static const QRegularExpression DROP_D("\\bdrop[\\s-]*D\\b(?![#♯b♭])", QRegularExpression::CaseInsensitiveOption);
       if (got.empty() && DROP_D.match(text).hasMatch())
             got.push_back({ 6, 2 });
-      // "Tuning: D A D G B E" (six names low to high after the word), or the word DADGAD
-      static const QRegularExpression SIX(QString::fromUtf8("(?:\\btuning|\\bstimmung|\\bafinaci[oó]n|\\baccordatura)\\s*[:=]?\\s*((?:")
+      // "Tuning: D A D G B E" (six names low to high after the word), the six letters run together after the word
+      // ("Tuning DGDGBE", "Stimmung DADF#AD"), or the word DADGAD
+      static const QString WORD = QString::fromUtf8("(?:\\btuning|\\bstimmung|\\bafinaci[oó]n|\\baccordatura|\\baccordage)");
+      static const QRegularExpression SIX(WORD + QString::fromUtf8("\\s*[:=]?\\s*((?:")
                                           + NOTE + QString::fromUtf8("[\\s,\\-–—/]*){6})$"), QRegularExpression::CaseInsensitiveOption);
+      static const QRegularExpression RUN("(?i:" + WORD + QString::fromUtf8(")\\s*[:=]?\\s*((?:[A-G](?:##|#|♯|bb|b|♭)?){6})(?![A-Za-z#♯♭])"));
       static const QRegularExpression DADGAD("(?:^|\\s)DADGAD(?:$|\\s)");
       QString six;
       QRegularExpressionMatch sm = SIX.match(text);
+      QRegularExpressionMatch rm = RUN.match(text);
       if (got.empty() && sm.hasMatch())
             six = sm.captured(1);
+      else if (got.empty() && rm.hasMatch()) {
+            static const QRegularExpression LETTER(QString::fromUtf8("([A-G])(##|#|♯|bb|b|♭)?"));
+            QStringList names;
+            auto li = LETTER.globalMatch(rm.captured(1));
+            while (li.hasNext()) {
+                  QRegularExpressionMatch l = li.next();
+                  names << l.captured(1) + l.captured(2);
+                  }
+            six = names.join(" ");
+            }
       else if (got.empty() && DADGAD.match(text).hasMatch())
             six = "D A D G A D";
       if (!six.isEmpty()) {

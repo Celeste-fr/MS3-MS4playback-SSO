@@ -2866,6 +2866,15 @@ void TestPlayability::guitar()
       QVERIFY(!isGuitar("pluck.guitar", "Lead Guitar"));
       QVERIFY(!isGuitar("", "Jazz Guitar"));
       QVERIFY(!isGuitar("strings.violin", "Violin"));
+      QVERIFY(isGuitar("", QString::fromUtf8("Violão")));
+      QVERIFY(!isGuitar("", "Viola"));
+      QVERIFY(isGuitar("", "Steel Guitar"));
+      QVERIFY(!isGuitar("", "Pedal Steel Guitar"));
+      QVERIFY(!isGuitar("", "Lap Steel Guitar"));
+      QVERIFY(!isGuitar("", "Dobro"));
+      QVERIFY(isSteelNamedGuitar("pluck.bouzouki", "Steel Guitar"));
+      QVERIFY(!isSteelNamedGuitar("pluck.guitar.pedal-steel", "Steel Guitar"));
+      QVERIFY(!isSteelNamedGuitar("", "Lap Steel Guitar"));
       QVERIFY(isGuitarSection("Guitars"));
       QVERIFY(isGuitarSection("Guitar I/II"));
       QVERIFY(!isGuitarSection("Guitar 2"));
@@ -2891,6 +2900,12 @@ void TestPlayability::guitar()
       QCOMPARE(read("5. Saite nach H"), QString("5=11"));
       QCOMPARE(read("Tuning: D A D G B E"), QString("6=2 5=9 4=2 3=7 2=11 1=4"));
       QCOMPARE(read("DADGAD"), QString("6=2 5=9 4=2 3=7 2=9 1=2"));
+      QCOMPARE(read("Tuning DGDGBE"), QString("6=2 5=7 4=2 3=7 2=11 1=4"));
+      QCOMPARE(read("Stimmung: DADF#AD"), QString("6=2 5=9 4=2 3=6 2=9 1=2"));
+      QCOMPARE(read("accordage DbAbDbGbBbEb"), QString("6=1 5=8 4=1 3=6 2=10 1=3"));
+      QCOMPARE(read("Tuning DGDGBEA"), QString());     // seven letters
+      QCOMPARE(read("DGDGBE"), QString());             // run together only after the word
+      QCOMPARE(read("Tuning DEADBEEF"), QString());
       QCOMPARE(read("1=D 4/4"), QString());           // a jianpu header: a key and a meter
       QCOMPARE(read("Capo II"), QString());
       QCOMPARE(read("6 in D"), QString());
@@ -2932,10 +2947,12 @@ void TestPlayability::guitar()
             "4 | Guitar | guitarStrings | impossible | E2 + F2",
             "3 | Guitar 2 | guitarStrings | impossible | D2 + E2",
             "1 | Guitar Y | guitarStrings | risky | E2 + F2",
-            // a held note that cannot keep its string: dark yellow on the held note
-            "6 | Guitar | guitarHeld | risky | E2",
-            "34 | Guitar | guitarHeld | risky | G#4",
-            "37 | Guitar | guitarHeld | risky | E2",
+            // a held note that cannot keep its string: a notation row on the held notes let go, only those (bar 51:
+            // E2, not D4)
+            "6 | Guitar | guitarHeld | notation | E2",
+            "34 | Guitar | guitarHeld | notation | G#4",
+            "37 | Guitar | guitarHeld | notation | E2",
+            "51 | Guitar | guitarHeld | notation | E2",
             // G3: red only in a stated tuning ("standard tuning", drop D by String Data, "⑥=D", the stated tuning after
             // the retunes with a capo text); dark yellow when no tuning is stated
             "8 | Guitar | guitarLow | risky | D2",
@@ -2946,8 +2963,15 @@ void TestPlayability::guitar()
             "2 | Guitar T | guitarLow | risky | D2",
             "3 | Guitar X | guitarLow | impossible | C#2",
             "1 | Steel | guitarLow | risky | D2",
-            // G4: B5 clean, C6 dark yellow
-            "9 | Guitar | guitarHigh | risky | C6",
+            // run-together tuning letters after the word: stated, so red
+            "2 | Guitar 3 | guitarLow | impossible | C#2",
+            "2 | Guitar 4 | guitarLow | impossible | C#2",
+            // detection: Violão and a plain Steel Guitar are checked; pedal steel, dobro, an E9 Steel Guitar are not
+            QString::fromUtf8("1 | Violão | guitarLow | risky | D2"),
+            "1 | Steel Guitar | guitarLow | risky | D2",
+            // G4: C6 (fret 20) clean, C#6 dark yellow; a C#6 tremolo one row
+            "9 | Guitar | guitarHigh | risky | C#6",
+            "49 | Guitar | guitarHigh | risky | C#6",
             // G5: 5 frets in position I dark yellow, the same 5 frets at 12-17 clean, frets 1-5 clean
             "10 | Guitar | guitarSpan | risky | F2 + D#3 + E3",
             // G6: five fingers dark yellow, four clean, the F barre clean
@@ -2978,7 +3002,7 @@ void TestPlayability::guitar()
                   QVERIFY2(row.reason.startsWith("stopped notes 5 frets apart at best (frets 1-6): from fret 1 the hand covers 4,"),
                            qPrintable(row.reason));
             if (row.kind == "guitarHigh")
-                  QVERIFY2(row.reason.startsWith("above B5 (written B6), the 19th fret of the highest string"), qPrintable(row.reason));
+                  QVERIFY2(row.reason.startsWith("above C6 (written C7), the 20th fret of the highest string (Sevsay p. 224"), qPrintable(row.reason));
             if (row.kind == "guitarHarmonicSpeed")
                   QVERIFY2(row.reason.startsWith("artificial harmonics 0.25 s apart"), qPrintable(row.reason));
             }
@@ -3001,8 +3025,22 @@ void TestPlayability::guitar()
       QVERIFY2(m.contains("Guitar | 42240 | 38 | impossible"), qPrintable(m.join("\n")));          // bar 23's D2
       QVERIFY2(m.contains("Guitar | 31680 | 65 | outOfReach"), qPrintable(m.join("\n")));          // bar 17's F4 diamond
       QVERIFY2(!m.contains("Guitar | 31680 | 48 | outOfReach"), qPrintable(m.join("\n")));         // its C3: clean
-      QVERIFY2(m.contains("Guitar | 9600 | 40 | outOfReach"), qPrintable(m.join("\n")));           // bar 6's held E2
+      QVERIFY2(m.contains("Guitar | 9600 | 40 | notation"), qPrintable(m.join("\n")));             // bar 6's held E2
+      QVERIFY2(!m.contains("Guitar | 9600 | 40 | outOfReach"), qPrintable(m.join("\n")));
       QVERIFY2(!m.contains("Guitar | 10080 | 41 | impossible"), qPrintable(m.join("\n")));         // its struck F2: not red
+      delete score;
+
+      // notation and TAB as two parts (Soundslice): the notation part takes the TAB part's drop D, stated; the TAB part
+      // is not checked again; a TAB part right after with the same id also counts; MuseScore's own TAB staff (one
+      // part) gives its rows once
+      score = readScore(DIR + "guitar-tabpair.mscx");
+      QVERIFY(score);
+      r = Playability::analyse(score);
+      QStringList pairWant = { "2 | Nylon Guitar | guitarLow | impossible | C#2", "3 | Nylon Guitar | guitarStrings | impossible | D2 + E2",
+                               "2 | Guitar | guitarLow | impossible | C#2", "2 | Guitar L | guitarHigh | risky | C#6",
+                               "3 | Guitar L | guitarLow | risky | D2" };
+      pairWant.sort();
+      compare(kindRows(r, kinds), pairWant);
       delete score;
 
       // a tuning in a title frame, a system text on the top staff: read, so stated

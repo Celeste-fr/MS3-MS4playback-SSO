@@ -244,6 +244,9 @@ class Pass {
             bool noRed { false };         // the String Data's octave could not be settled: no red from G2 / G3
             };
       GuitarTuning guitarTuning(Part* part, int tick);
+      std::map<Part*, Part*> _tabPartners;
+      Part* guitarTabPartner(Part* part);
+      bool pairedTab(Part* part);
       void checkGuitar(Part* part, const QString& staffName);
       // brass (diagrams-spec-brass.md)
       BrassPart brassPart(Part* part) const;
@@ -1063,8 +1066,25 @@ static Family familyOf(Part* part)
       if (isAccordion(id, name))
             return Family::ACCORDION;       // before the keyboards: a part named for one is an accordion
       // a guitar: the id, else the name; the part's own names may also rule it out (a part renamed "Bass Guitar")
-      if (isGuitar(id, name + " | " + plainText(part->longName()) + " | " + plainText(part->partName())))
+      const QString names = name + " | " + plainText(part->longName()) + " | " + plainText(part->partName());
+      if (isGuitar(id, names))
             return Family::GUITAR;
+      if (isSteelNamedGuitar(id, names)) {
+            // six strings near the standard tuning (the lowest in B1-A2, an octave either way for an import's
+            // octave error), or no String Data (the default)
+            const Instrument* ins = part->instrument();
+            const QList<instrString>& data = ins->stringData()->stringList();
+            if (data.isEmpty())
+                  return Family::GUITAR;
+            if (data.size() == GUITAR_STRINGS) {
+                  int low = 999;
+                  for (const instrString& s : data)
+                        low = std::min(low, s.pitch + ins->transpose().chromatic);
+                  for (int shift : { 0, -12, 12 })
+                        if (low + shift >= GUITAR_LOW_WINDOW_LO && low + shift <= GUITAR_LOW_WINDOW_HI)
+                              return Family::GUITAR;
+                  }
+            }
       if (isKeyboard(id, name) && part->nstaves() >= 2)
             return Family::KEYBOARD;
       if (brassType(id, name) != Brass::NONE)
@@ -4335,13 +4355,16 @@ Pass::GuitarTuning Pass::guitarTuning(Part* part, int tick)
                   return g;
             }
       StringInstrument base = guitarInstrument();
-      const QList<instrString>& data = ins->stringData()->stringList();
+      // a notation part whose tablature is a separate part (Soundslice and similar exporters): the TAB part's tuning
+      Part* tabPart = guitarTabPartner(part);
+      const Instrument* src = tabPart ? tabPart->instrument(Fraction::fromTicks(tick)) : ins;
+      const QList<instrString>& data = src->stringData()->stringList();
       if (!data.isEmpty()) {
             if (data.size() != GUITAR_STRINGS)
                   return g;                     // not a six-string guitar
             std::vector<int> lowToHigh;
             for (const instrString& s : data)
-                  lowToHigh.push_back(s.pitch + ins->transpose().chromatic);
+                  lowToHigh.push_back(s.pitch + src->transpose().chromatic);
             const int low = *std::min_element(lowToHigh.begin(), lowToHigh.end());
             int shift = -1000;
             for (int k : { 0, -12, 12, -24, 24 })
@@ -4357,7 +4380,7 @@ Pass::GuitarTuning Pass::guitarTuning(Part* part, int tick)
                   base = withStrings(base, lowToHigh);
                   }
             }
-      g.stated = base.strings != guitarInstrument().strings;
+      g.stated = (tabPart && !g.noRed) || base.strings != guitarInstrument().strings;
       g.in = base;
       for (const GuitarTuningText& t : found->second) {
             if (t.tick > tick)
@@ -4373,6 +4396,60 @@ Pass::GuitarTuning Pass::guitarTuning(Part* part, int tick)
             g.stated = true;
             }
       return g;
+      }
+
+// a part whose every staff is tablature
+static bool allTab(const Part* p)
+      {
+      if (p->nstaves() == 0)
+            return false;
+      for (int i = 0; i < p->nstaves(); ++i)
+            if (!p->staff(i)->isTabStaff(Fraction(0, 1)))
+                  return false;
+      return true;
+      }
+
+// A notation part's tablature written as a separate part (Soundslice and similar exporters write notation and TAB as two
+// parts with the same name; only the TAB part carries the tuning): a six-string, all-TAB part with the same name, else
+// the part right after it with the same instrument id (exporters put the TAB under its notation). Null when there is none (MuseScore's own linked TAB staff is
+// a staff of the same part and needs nothing)
+Part* Pass::guitarTabPartner(Part* part)
+      {
+      auto cached = _tabPartners.find(part);
+      if (cached != _tabPartners.end())
+            return cached->second;
+      Part* found = nullptr;
+      if (!allTab(part)) {
+            const QList<Part*>& parts = _score->parts();
+            const int idx = parts.indexOf(part);
+            const QString name = plainText(part->partName()).simplified();
+            const QString lname = plainText(part->longName()).simplified();
+            const QString id = part->instrument()->instrumentId();
+            for (int pass = 0; pass < 2 && !found; ++pass)
+                  for (int i = 0; i < parts.size() && !found; ++i) {
+                        Part* q = parts[i];
+                        if (q == part || !allTab(q) || q->instrument()->stringData()->stringList().size() != GUITAR_STRINGS)
+                              continue;
+                        const bool same = pass == 0
+                                          ? ((!name.isEmpty() && plainText(q->partName()).simplified() == name)
+                                             || (!lname.isEmpty() && plainText(q->longName()).simplified() == lname))
+                                          : (i == idx + 1 && !id.isEmpty() && q->instrument()->instrumentId() == id);
+                        if (same)
+                              found = q;
+                        }
+            }
+      return _tabPartners[part] = found;
+      }
+
+// the TAB half of such a pair whose notation half is checked as a guitar: not checked again
+bool Pass::pairedTab(Part* part)
+      {
+      if (!allTab(part))
+            return false;
+      for (Part* p : _score->parts())
+            if (p != part && guitarTabPartner(p) == part && familyOf(p) == Family::GUITAR)
+                  return true;
+      return false;
       }
 
 // a chord's harmonic notation, as the bowed strings read it (handle): diamond heads, harmonic circles; the notes in
@@ -4426,6 +4503,7 @@ void Pass::checkGuitar(Part* part, const QString& staffName)
       struct Held { PartNote pn; int end; bool harmonic; };
       std::vector<Held> held;
       std::set<const Note*> heldReported;
+      std::map<int, int> highRun;               // G4: per track, the high note of the run in progress
       QString id, name;
       partIdName(part, &id, &name);
       const bool section = isGuitarSection(name + " | " + plainText(part->longName()) + " | " + plainText(part->partName()));
@@ -4509,17 +4587,27 @@ void Pass::checkGuitar(Part* part, const QString& staffName)
                   }
             // G3 below the lowest string, G4 above the 19th fret of the highest
             std::vector<const PartNote*> below, above, ordinary;
+            std::map<int, int> highNow;         // per track: the highest note above the top struck now
             for (const PartNote* pn : struck) {
                   if (harmonic.count(pn->note))
                         continue;
                   const int p = pn->note->ppitch();
+                  const int track = pn->chord->track();
                   if (p < lowest)
                         below.push_back(pn);
                   else {
                         ordinary.push_back(pn);
-                        if (p > top)
-                              above.push_back(pn);
+                        if (p > top) {
+                              highNow[track] = std::max(highNow.count(track) ? highNow[track] : 0, p);
+                              auto run = highRun.find(track);
+                              if (run == highRun.end() || run->second != p)
+                                    above.push_back(pn);      // not a repeat of the same high note (a tremolo: one row)
+                              }
                         }
+                  }
+            for (const PartNote* pn : struck) {
+                  const int track = pn->chord->track();
+                  highRun[track] = highNow.count(track) ? highNow[track] : -1;
                   }
             if (gt.stated && !gt.noRed)
                   momentRow(m, below, staffName, "guitarLow", true,
@@ -4532,8 +4620,8 @@ void Pass::checkGuitar(Part* part, const QString& staffName)
                             .arg(plainName(lowest), spell,
                                  gt.noRed ? QString(" (the String Data's octave is unclear)") : QString(" (the score states no tuning)")));
             momentRow(m, above, staffName, "guitarHigh", false,
-                      QString("above %1 (written %2), the 19th fret of the highest string (Blatter pp. 278, 282; Sevsay p. 224: "
-                              "written b''' or c''''): some guitars reach C or a little higher (Blatter p. 282)")
+                      QString("above %1 (written %2), the 20th fret of the highest string (Sevsay p. 224: the concert guitar to "
+                              "written c'''', sounding C6; Blatter pp. 278, 282: 19 frets, the top varies)")
                       .arg(plainName(top), plainName(top + 12)));
 
             if (int(struckPitches.size()) <= GUITAR_STRINGS && !ordinary.empty()) {
@@ -4565,24 +4653,48 @@ void Pass::checkGuitar(Part* part, const QString& staffName)
                               if (std::find(in.strings.begin(), in.strings.end(), p) != in.strings.end() && withOpen.insert(p).second)
                                     openNames << plainName(p);
                               }
-                        if (!heldOn.empty() && (all.size() > size_t(GUITAR_STRINGS)
-                                                || !fitGuitar(in, std::vector<int>(all.begin(), all.end())).assignable)) {
+                        if (!heldOn.empty() && !fitGuitar(in, std::vector<int>(all.begin(), all.end())).assignable) {
+                              // let go the fewest held notes so that the rest fit, the lower first among equals; only
+                              // those are marked
+                              std::stable_sort(heldOn.begin(), heldOn.end(),
+                                               [](const PartNote* x, const PartNote* y) { return x->note->ppitch() < y->note->ppitch(); });
+                              const int nh = std::min(int(heldOn.size()), 12);
+                              unsigned release = (1u << nh) - 1;
+                              bool found = false;
+                              for (int k = 1; k <= nh && !found; ++k)
+                                    for (unsigned mask = 1; mask < (1u << nh) && !found; ++mask) {
+                                          int bits = 0;
+                                          for (unsigned x = mask; x; x >>= 1)
+                                                bits += int(x & 1u);
+                                          if (bits != k)
+                                                continue;
+                                          std::set<int> rest = struckSet;
+                                          for (int i = 0; i < nh; ++i)
+                                                if (!(mask & (1u << i)))
+                                                      rest.insert(heldOn[i]->note->ppitch());
+                                          if (fitGuitar(in, std::vector<int>(rest.begin(), rest.end())).assignable) {
+                                                release = mask;
+                                                found = true;
+                                                }
+                                          }
                               std::vector<const PartNote*> fresh;
-                              for (const PartNote* h : heldOn)
-                                    if (heldReported.insert(h->note).second)
-                                          fresh.push_back(h);
+                              for (int i = 0; i < nh; ++i)
+                                    if ((release & (1u << i)) && heldReported.insert(heldOn[i]->note).second)
+                                          fresh.push_back(heldOn[i]);
                               QStringList now;
                               for (int p : struckSet)
                                     now << plainName(p);
                               momentRow(m, fresh, staffName, "guitarHeld", false,
-                                        QString("held from before, it cannot keep a string while %1 is struck (%2): let it go here or "
-                                                "write it shorter; %3").arg(now.join(" + "), spell, SIX));
+                                        QString("held from before, it cannot keep a string while %1 is struck (%2): written longer than "
+                                                "it can ring, players let it go here (a notation habit, not a playing risk); %3")
+                                        .arg(now.join(" + "), spell, SIX));
                               }
                         // G5, G6: the notes struck plus held open strings (a held stopped note can be let go)
                         GuitarFit hand = fit;
                         if (withOpen.size() > struckSet.size()) {
                               GuitarFit f2 = fitGuitar(in, std::vector<int>(withOpen.begin(), withOpen.end()));
-                              if (f2.assignable)
+                              // a held open string that widens the hand or needs more fingers is let go instead
+                              if (f2.assignable && f2.excess <= fit.excess + 1e-9 && f2.fingers <= fit.fingers)
                                     hand = f2;
                               else
                                     openNames.clear();
@@ -5113,8 +5225,10 @@ void Pass::run()
                   checkBrass(part, staffName);
             else if (f == Family::ACCORDION)
                   checkAccordion(part, staffName);
-            else if (f == Family::GUITAR)
-                  checkGuitar(part, staffName);
+            else if (f == Family::GUITAR) {
+                  if (!pairedTab(part))
+                        checkGuitar(part, staffName);
+                  }
             else
                   checkKeyboard(part, staffName);
             }

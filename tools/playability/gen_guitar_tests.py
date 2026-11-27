@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Write the guitar fixtures for tst_playability::guitar (PLAYABILITY.md "Guitar", checks G1-G8): guitar-tests.mscx,
-guitar-frame.mscx, guitar-system.mscx and guitar-import.musicxml. 4/4, quarter = 60 (a bar is 4 s); every staff starts
+guitar-tabpair.mscx, guitar-frame.mscx, guitar-system.mscx and guitar-import.musicxml. 4/4, quarter = 60 (a bar is 4 s); every staff starts
 with mf. Pitches are SOUNDING (as MuseScore keeps them; the guitar is written an octave higher). Frets below are for the
 standard tuning E2 A2 D3 G3 B3 E4, strings VI..I. R = red row expected, Y = dark yellow, "clean" = no guitar row.
 A tuning is STATED when the String Data differs from the standard tuning or a tuning text is in force (G3 red only then).
@@ -13,11 +13,11 @@ guitar-tests.mscx
      4  E2 + F2                              R G2 (both only on string VI: the planted fault)
      5  E2 + A#2 | F2 + A#2 (halves)         clean (VI open + V 1; VI 1 + V 1: the controls)
      6  voice 1 E2 whole; voice 2 quarter rest, F2, half rest
-                                             Y guitarHeld on the held E2 at beat 2 (F2 alone is playable: no red)
+                                             N guitarHeld (notation) on the held E2 at beat 2 (F2 alone is playable)
      7  voice 1 E2 half, half rest; voice 2 half rest, F2 half
                                              clean (E2 has ended)
      8  D2                                   Y G3 (below E2, no tuning stated: retune)
-     9  B5 | C6 (halves)                     clean | Y G4 (above B5, the 19th fret of string I)
+     9  C6 | C#6 (halves)                    clean | Y G4 (above C6, the 20th fret of string I: Sevsay p. 224)
     10  F2 D#3 E3                            Y G5 (best: frets 1-6, VI 1, V 6, IV 2; the hand covers 4 there)
     11  E3 D4 D#4                            clean (best: frets 12-17, the same 5 frets high on the neck: 8.5 fit)
     12  F2 A#2 A4                            clean (frets 1-5: exactly the hand with one extension)
@@ -45,11 +45,11 @@ guitar-tests.mscx
     33  A2 + diamond E5                      clean (a natural harmonic at XII of string I over an open bass: no
                                              artificial misreading, A2 checked as an ordinary note)
     34  voice 1 G#4 half, half rest; voice 2 quarter rest, E2 B2 E3 G#3 B3 E4, half rest
-                                             Y guitarHeld on G#4 (seven sounding; the struck six are playable: no red)
+                                             N guitarHeld on G#4 (seven sounding; the struck six are playable: no red)
     35  voice 1 E4 whole; voice 2 E2 B2 E3 G#3 B3 E4
                                              clean (a unison in two voices is one note)
     36-37  voice 1 E2 tied over the bar; voice 2 in bar 37: quarter rest, F2, half rest
-                                             Y guitarHeld on the tied E2 at bar 37
+                                             N guitarHeld on the tied E2 at bar 37
     39  E2 A2 D3 G3 B3 E4 G4 rolled (arpeggio)
                                              Y G1 (a rolled chord can let a note go)
     40  text "6=Bb", A#1                     clean (a tritone retune goes down: Bb1)
@@ -62,6 +62,15 @@ guitar-tests.mscx
     48  voice 2 G2 half, half rest; voice 1 quarter rest, D5, half rest
                                              clean (a held stopped bass is let go: G5 counts struck notes and held
                                              open strings only)
+    49  C#6 eighths (a tremolo)              Y G4 once (one row per run of the same high note)
+    50  voice 2 D3 dotted half, quarter rest; voice 1 quarter rest, A#2 C#3 G#3, half rest
+                                             clean (the held open D3 would force frets 1-6: it is let go instead)
+    51  voice 2 E2 + D4 whole; voice 1 quarter rest, F2, half rest
+                                             N guitarHeld on E2 only (D4 keeps its string: only the released note)
+  Guitar 3 (text "Tuning DGDGBE": six letters run together) 1 D2 clean, 2 C#2 R G3
+  Guitar 4 (text "accordage DADF#AD") 1 D2 clean, 2 C#2 R G3
+  Violão (no id, program 24) and Steel Guitar (no id, program 25, no String Data): D2 Y G3 each (checked); Pedal Steel
+  Guitar, Dobro, and Steel Guitar E9 (String Data B2 D3 E3 F#3 G#3 B3, not near standard): no guitar rows
   Guitar 2 (pluck.guitar.nylon-string, String Data D A D G B E: drop D, stated)
      1  D2                                   clean
      2  C#2                                  R G3 (below D2)
@@ -88,6 +97,11 @@ guitar-tests.mscx
   Bass Guitar (pluck.bass.electric), 12-string Guitar (pluck.guitar), Distortion Guitar (no id)
      1  D2 + Eb2                             no guitar rows (out of scope)
   Violin (strings.violin): bars 26-32 as the guitar's: the bowed checks' positive control
+guitar-tabpair.mscx: notation and TAB as two parts (Soundslice's export)
+  Nylon Guitar (notation, the template's standard String Data) + Nylon Guitar (TAB, String Data drop D): the notation
+  part borrows drop D, stated; the TAB part is not checked again: 1 D2 clean, 2 C#2 R G3, 3 D2 + E2 R G2, once each
+  Guitar (notation) + TAB (the part right next to it, same id, TAB, drop D): 1 D2 clean, 2 C#2 R G3
+  Guitar L (one part, a notation staff and a TAB staff with the same notes): 1 C6 clean, 2 C#6 Y G4 once, 3 D2 Y G3 once
 guitar-frame.mscx: a title frame "Drop D"; Guitar: 1 D2 clean, 2 C#2 R G3
 guitar-system.mscx: Flute on top with a system text "⑥ = Ré"; Guitar below: 1 D2 clean
 guitar-import.musicxml: a treble-clef guitar as MuseScore exports it (instrument-sound pluck.guitar.nylon-string,
@@ -104,7 +118,7 @@ TPC = {'F': 13, 'C': 14, 'G': 15, 'D': 16, 'A': 17, 'E': 18, 'B': 19}
 FULL = '<Rest><durationType>measure</durationType><duration>4/4</duration></Rest>'
 HALF_REST = '<Rest><durationType>half</durationType></Rest>'
 QUARTER_REST = '<Rest><durationType>quarter</durationType></Rest>'
-BARS = 48
+BARS = 51
 DIAMOND = '<head>diamond</head>'
 CIRCLE = '<Symbol><name>stringsHarmonic</name></Symbol>'
 
@@ -178,17 +192,22 @@ def staff(bars, c, tempo_mark=False, voice2=None, before=''):
     return out
 
 
-def part(name, iid, program, clef, strings=None, transpose=0):
+def part(name, iid, program, clef, strings=None, transpose=0, tab=False, staves=1):
     sd = ''
     if strings:
         sd = '<StringData><frets>19</frets>%s</StringData>' % ''.join('<string>%d</string>' % s for s in strings)
     tr = ('<transposeDiatonic>-7</transposeDiatonic><transposeChromatic>%d</transposeChromatic>' % transpose
           if transpose else '')
     idx = '<instrumentId>%s</instrumentId>' % iid if iid else ''
-    return ('<Part><Staff id="1"><StaffType group="pitched"><name>stdNormal</name></StaffType><defaultClef>%s</defaultClef>'
-            '</Staff><trackName>%s</trackName><Instrument><longName>%s</longName><trackName>%s</trackName>%s%s%s'
+    pitched = '<Staff id="1"><StaffType group="pitched"><name>stdNormal</name></StaffType><defaultClef>%s</defaultClef></Staff>' % clef
+    tabbed = ('<Staff id="1"><StaffType group="tablature"><name>tab6StrCommon</name><lines>6</lines></StaffType>'
+              '<defaultClef>TAB</defaultClef></Staff>')
+    st = tabbed if tab else pitched
+    if staves == 2:
+        st = pitched + tabbed
+    return ('<Part>%s<trackName>%s</trackName><Instrument><longName>%s</longName><trackName>%s</trackName>%s%s%s'
             '<Channel><program value="%d"/></Channel></Instrument></Part>'
-            % (clef, name, name, name, idx, tr, sd, program))
+            % (st, name, name, name, idx, tr, sd, program))
 
 
 def write(fn, parts, staves):
@@ -227,7 +246,7 @@ guitar = {
     6: w('E2'),
     7: h('E2') + HALF_REST,
     8: w('D2'),
-    9: h('B5') + h('C6'),
+    9: h('C6') + h('C#6'),
     10: w('F2 D#3 E3'),
     11: w('E3 D4 D#4'),
     12: w('F2 A#2 A4'),
@@ -266,6 +285,9 @@ guitar.update({
     46: q('A2 E3 A3 C4 E4') + q('E2 B2 E3 G3 B3 E4') + q('B2 F#3 B3 D4 F#4') + q('B2 D3 G3 B3 G4'),
     47: q('F#2 D3 A3 D4 F#4') + q('G2 C3 E3 G3 C4 E4') + q('D3 A3 D4 F4') + q('A2 E3 A3 C#4 E4'),
     48: QUARTER_REST + q('D5') + HALF_REST,
+    49: ''.join(e('C#6') for _ in range(8)),
+    50: QUARTER_REST + q('A#2 C#3 G#3') + HALF_REST,
+    51: QUARTER_REST + q('F2') + HALF_REST,
 })
 guitar_v2 = {
     6: QUARTER_REST + q('F2') + HALF_REST,
@@ -274,6 +296,8 @@ guitar_v2 = {
     35: w(E_CHORD),
     37: QUARTER_REST + q('F2') + HALF_REST,
     48: h('G2') + HALF_REST,
+    50: chord('half', 'D3', pre='<dots>1</dots>') + QUARTER_REST,
+    51: w('E2 D4'),
 }
 
 G8VB = ('G8vb', 'G8vb')
@@ -289,6 +313,13 @@ write('guitar-tests.mscx',
        part('Guitar X', 'pluck.guitar.nylon-string', 24, 'G', DROP_D, transpose=-12),
        part('Guitar Y', 'pluck.guitar.nylon-string', 24, 'G8vb', UNCLEAR),
        part('Guitars', 'pluck.guitar.acoustic', 25, 'G8vb', STANDARD),
+       part('Guitar 3', 'pluck.guitar.nylon-string', 24, 'G8vb', STANDARD),
+       part('Guitar 4', 'pluck.guitar.nylon-string', 24, 'G8vb', STANDARD),
+       part('Violão', '', 24, 'G8vb'),
+       part('Steel Guitar', '', 25, 'G8vb'),
+       part('Pedal Steel Guitar', '', 25, 'G8vb'),
+       part('Dobro', '', 25, 'G8vb'),
+       part('Steel Guitar E9', '', 25, 'G8vb', [47, 50, 52, 54, 56, 59]),
        part('Steel', 'pluck.guitar.steel-string', 25, 'G8vb', STANDARD),
        part('Bass Guitar', 'pluck.bass.electric', 33, 'F8vb'),
        part('12-string Guitar', 'pluck.guitar', 25, 'G8vb', STANDARD),
@@ -301,11 +332,31 @@ write('guitar-tests.mscx',
        staff({1: w('C5 E5'), 2: w('D2'), 3: w('C#2')}, TREBLE),
        staff({1: w('E2 F2')}, G8VB),
        staff({1: w(SEVEN), 2: w('E2 A2 D3'), 3: text('non div.') + w(SEVEN)}, G8VB, voice2={2: w('G3 B3 E4 G4')}),
+       staff({1: text('Tuning DGDGBE') + w('D2'), 2: w('C#2')}, G8VB),
+       staff({1: text('accordage DADF#AD') + w('D2'), 2: w('C#2')}, G8VB),
+       staff({1: w('D2')}, G8VB),
+       staff({1: w('D2')}, G8VB),
+       staff({1: w('D2 Eb2')}, G8VB),
+       staff({1: w('D2 Eb2')}, G8VB),
+       staff({1: w('D2 Eb2')}, G8VB),
        staff({1: w('D2')}, G8VB),
        staff({1: w('D2 Eb2')}, ('F8vb', 'F8vb')),
        staff({1: w('D2 Eb2')}, G8VB),
        staff({1: w('D2 Eb2')}, G8VB),
        staff(CONTROL, TREBLE)])
+
+# notation + TAB as two parts (Soundslice); MuseScore's own TAB staff in one part
+TABHEAD = ('TAB', 'TAB')
+pair = {1: w('D2'), 2: w('C#2'), 3: w('D2 E2')}
+write('guitar-tabpair.mscx',
+      [part('Nylon Guitar', 'pluck.guitar.nylon-string', 24, 'G8vb', STANDARD),
+       part('Nylon Guitar', 'pluck.guitar.nylon-string', 24, 'G8vb', DROP_D, tab=True),
+       part('Guitar', 'pluck.guitar.nylon-string', 24, 'G8vb', STANDARD),
+       part('TAB', 'pluck.guitar.nylon-string', 24, 'G8vb', DROP_D, tab=True),
+       part('Guitar L', 'pluck.guitar.nylon-string', 24, 'G8vb', STANDARD, staves=2)],
+      [staff(pair, G8VB, True), staff(pair, TABHEAD),
+       staff({1: w('D2'), 2: w('C#2')}, G8VB), staff({1: w('D2'), 2: w('C#2')}, TABHEAD),
+       staff({1: w('C6'), 2: w('C#6'), 3: w('D2')}, G8VB), staff({1: w('C6'), 2: w('C#6'), 3: w('D2')}, TABHEAD)])
 
 FRAME = '<VBox><height>10</height><Text><style>Title</style><text>Drop D</text></Text></VBox>'
 write('guitar-frame.mscx', [part('Guitar', 'pluck.guitar.nylon-string', 24, 'G8vb', STANDARD)],

@@ -496,10 +496,11 @@ constexpr int GUITAR_STRINGS = 6;                   // Blatter pp. 278, 445; Sev
 // G2: a note may be stopped up to fret 24 (Blatter p. 283, footnote: some guitars have 24 frets, not all; the
 // usual 19 frets, Blatter pp. 278, 445, only for G4): red only when no 24-fret guitar has a string for every note
 constexpr int GUITAR_MAX_FRET = 24;
-// G4: above the highest string + 19 frets: in standard tuning sounding B5, written B6 (Blatter p. 278, 19 frets;
-// p. 282, the top, high B, varies and some guitars reach C or a little above; Sevsay p. 224, written b''' or c'''').
-// Follows a retuned string I. Dark yellow, never red
-constexpr int GUITAR_FRETS = 19;
+// G4: above the highest string as tuned + 20 frets: in standard tuning sounding C6, written C7. Sevsay p. 224 gives the
+// concert guitar's top as written b''' or c'''' (sounding C6 = fret 20 of string I); Blatter p. 278 gives 19 frets and
+// p. 282 says the top varies, some guitars reach C or a little above. Dark yellow, never red; one row per run of the
+// same pitch repeated in a voice (a tremolo)
+constexpr int GUITAR_FRETS = 20;
 // G5 hand frame: Blatter p. 445's position with one extension. In position I (the index ready at fret 1) the
 // hand covers frets 1-4 and the little finger's extension reaches fret 5: the reference is the LENGTH along the
 // string from fret 1 to fret 5. Frets follow the 12-TET geometry, so the same length covers more frets higher up
@@ -515,14 +516,16 @@ constexpr int GUITAR_FINGERS = 4;
 constexpr double GUITAR_ARTIFICIAL_BPM = 90;
 constexpr double GUITAR_ARTIFICIAL_SECONDS = 60.0 / GUITAR_ARTIFICIAL_BPM / 2;
 
-// a six-string classical or acoustic guitar: MusicXML id pluck.guitar.nylon-string or pluck.guitar.acoustic,
-// pluck.guitar or no id with a guitar name (guitar, guitare, Gitarre, chitarra, guitarra; plurals too). Not the
-// bass guitar, 12-string, high-G (Nashville) tuning, electric, pedal steel, 7- / 11-string, soprano, alto,
-// baritone, contra or terz guitars (out of scope: PLAYABILITY.md "Guitar")
+// a six-string classical or acoustic guitar: MusicXML id pluck.guitar.nylon-string, .acoustic or .steel-string,
+// pluck.guitar or no id with a guitar name (guitar, guitare, Gitarre, chitarra, guitarra, violão; plurals too; "Steel
+// Guitar" is Soundslice's name for the acoustic guitar). Not the bass guitar, 12-string, high-G (Nashville) tuning,
+// electric, pedal or lap steel, dobro, Hawaiian, 7- / 11-string, soprano, alto, baritone, contra or terz guitars (out of
+// scope: PLAYABILITY.md "Guitar")
 bool isGuitar(const QString& instrumentId, const QString& name);
 // a guitar section, one staff for several players: a plural name (Guitars, Gitarren, chitarre, guitarras, guitares) or
 // "I/II", "1 & 2"; like the bowed sections, a chord one player cannot play is dark yellow (players may divide it)
 // unless a "non div." text is in force
+bool isSteelNamedGuitar(const QString& id, const QString& name);
 bool isGuitarSection(const QString& name);
 // an artificial harmonic's touch above the stop: 12, 5, 4 or 3 frets (Blatter p. 283)
 bool guitarArtificialTouch(int interval);
@@ -810,7 +813,7 @@ constexpr const char* C3_LEGATO_WORDS = "legato";
 constexpr const char* NOTATION_KINDS[] = {
       "ledger", "clef", "divisi", "firstDynamic", "technique", "accidental", "clarinetKey",
       "stringName", "harmonicString", "harmonicLine", "vocal", "tempo", "slurRepeat",
-      "accordionNotation" };
+      "accordionNotation", "guitarHeld" };
 // the guitar's row kinds (G1-G8), in order
 constexpr const char* GUITAR_KINDS[] = {
       "guitarNotes", "guitarStrings", "guitarLow", "guitarHigh", "guitarSpan", "guitarFingers", "guitarHarmonic",
